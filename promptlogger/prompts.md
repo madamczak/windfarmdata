@@ -104,3 +104,7 @@
 
 > ok, so now, next endpoint that comes to my mind is connected to time ranges of each dataset. the earliest and latest datetime for each collection
 
+## Entry 27 - 2026-04-03 22:20
+
+> ok it returns: {"time_ranges": [{"farm": "kelmarsh", "earliest": null, "latest": null, "timestamp_column": null}, {"farm": "penmanshiel", "earliest": null, "latest": null, "timestamp_column": null}, {"farm": "hill_of_towie", "earliest": null, "latest": null, "timestamp_column": null}]} so there is a problem with reading the data. Fix it
+

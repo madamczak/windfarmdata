@@ -6,8 +6,9 @@ import os
 import glob
 import re
 from fastapi import APIRouter
-from backend.models.schemas import WindFarm, WindFarmsResponse
+from backend.models.schemas import WindFarm, WindFarmsResponse, TimeRange, WindFarmTimeRangesResponse
 from backend.config import settings
+from backend.services.query_service import get_time_range
 
 router = APIRouter(prefix="/wind-farms", tags=["Wind Farms"])
 
@@ -77,4 +78,39 @@ def list_wind_farms() -> WindFarmsResponse:
     ]
 
     return WindFarmsResponse(wind_farms=available, total=len(available))
+
+
+@router.get(
+    "/time-ranges",
+    response_model=WindFarmTimeRangesResponse,
+    summary="Get time ranges for all wind farms",
+    description=(
+        "Returns the earliest and latest timestamps found across all parquet "
+        "files for each wind farm. Useful for understanding the time span of "
+        "each dataset before querying. Uses DuckDB for efficient min/max "
+        "scanning without loading full datasets into memory."
+    ),
+)
+def get_wind_farm_time_ranges() -> WindFarmTimeRangesResponse:
+    """Scan all parquet files per farm and return their earliest/latest timestamps."""
+    base = os.path.abspath(settings.parquet_base_path)
+
+    results = []
+    for _, dir_name in WIND_FARM_MAP:
+        farm_dir = os.path.join(base, dir_name)
+        if not os.path.isdir(farm_dir):
+            continue
+
+        earliest, latest, ts_col = get_time_range(farm_dir)
+        results.append(
+            TimeRange(
+                farm=dir_name,
+                earliest=earliest,
+                latest=latest,
+                timestamp_column=ts_col,
+            )
+        )
+
+    return WindFarmTimeRangesResponse(time_ranges=results)
+
 
