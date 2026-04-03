@@ -108,3 +108,7 @@
 
 > ok it returns: {"time_ranges": [{"farm": "kelmarsh", "earliest": null, "latest": null, "timestamp_column": null}, {"farm": "penmanshiel", "earliest": null, "latest": null, "timestamp_column": null}, {"farm": "hill_of_towie", "earliest": null, "latest": null, "timestamp_column": null}]} so there is a problem with reading the data. Fix it
 
+## Entry 28 - 2026-04-03 22:25
+
+> ok, commit changes, end of work for today
+
