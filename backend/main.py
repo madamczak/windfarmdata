@@ -6,6 +6,7 @@ Run locally with:
 """
 
 from fastapi import FastAPI
+import uvicorn
 from backend.routers import wind_farms
 
 app = FastAPI(
@@ -21,4 +22,9 @@ app = FastAPI(
 # Routers
 # ---------------------------------------------------------------------------
 app.include_router(wind_farms.router)
+
+
+if __name__ == "__main__":
+    uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=True)
+
 
