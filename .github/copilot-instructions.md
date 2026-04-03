@@ -17,7 +17,7 @@
 - Each entry is appended in the following format:
 
 ```
-## Entry N - YYYY-MM-DD
+## Entry N - YYYY-MM-DD HH:MM
 
 > <user prompt text>
 ```
@@ -31,4 +31,5 @@
 - Follow PEP 8 for Python code.
 - Follow Vue 3 Composition API conventions for frontend code.
 - Keep backend and frontend code clearly separated in the project structure.
+- **Do not create README files** unless explicitly asked by the user.
 

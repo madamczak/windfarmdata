@@ -30,3 +30,7 @@
 
 > ok so there is a file that describes default behavior of this model. I don't know it's name but also there is something like skills that are also saved in similiar file. Create this file for me and set it up in correct directory so that my all next prompts take it into account. I want something like this initial list: whatever backend code in python, whatever frontend code in vue js, don't run code in the terminal, create a directory scripts and write scripts in that directory and execute them later as files in terminal
 
+## Entry 8 - 2026-04-03 20:15
+
+> ok add time to prompt logging instructions and add a general rule to not create readme files until asked specifically
+
