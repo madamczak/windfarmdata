@@ -26,6 +26,13 @@
 - Entry numbers increment sequentially from the last existing entry in the file.
 - If `promptlogger/prompts.md` does not exist, create it with `# Prompt Log` as the first line.
 
+## Pre-Change Commit
+
+- **Before making any change to any file**, first run `scripts/git_commit.py` via the terminal with the user's prompt as the commit message.
+- This creates a snapshot of the repository state before the change, so every prompt maps to a clean git diff.
+- The commit message format is: `snapshot: <user prompt text (truncated to 72 chars)>`
+- The prompt log entry must be written to `promptlogger/prompts.md` **before** the pre-change commit is made.
+
 ## General Preferences
 
 - Prefer clean, readable, well-commented code.

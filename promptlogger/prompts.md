@@ -84,3 +84,11 @@
 
 > ok, cool, now, commit the changes but exclude data directory
 
+## Entry 22 - 2026-04-03 21:55
+
+> ok, cool, can I have a commit each time I enter a prompt? Just before any change is made or even thought about.
+
+## Entry 23 - 2026-04-03 22:00
+
+> ok, now, make a change to the endpoint that provide names and make it return name and number of turbines in each collection
+
