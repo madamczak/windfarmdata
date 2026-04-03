@@ -100,3 +100,7 @@
 
 > ok, it returns {"wind_farms": [{"name": "Kelmarsh", "directory": "kelmarsh", "turbine_count": 6}, {"name": "Penmanshiel", "directory": "penmanshiel", "turbine_count": 15}, {"name": "Hill of Towie", "directory": "hill_of_towie", "turbine_count": 0}], "total": 3} turbine count in hill of towie is 21 as last set have T21_ as prefix - T21_SCTurDigiOut.parquet
 
+## Entry 26 - 2026-04-03 22:15
+
+> ok, so now, next endpoint that comes to my mind is connected to time ranges of each dataset. the earliest and latest datetime for each collection
+
