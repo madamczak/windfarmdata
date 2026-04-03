@@ -1,0 +1,8 @@
+pandas
+pyarrow
+matplotlib
+fastapi
+uvicorn[standard]
+pydantic-settings
+duckdb
+

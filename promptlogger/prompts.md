@@ -4,9 +4,7 @@
 
 > I wonder if you can save a prompt to a file in a project directory. For example save this prompt to a .md file and later when I enter a prompt it would be saved as next in that file
 
-
-
-## Entry 2 — 2026-04-03 19:59:41
+## Entry 2 — 2026-04-03 19:59
 
 > ok let's check it - so can you this prompt in prompts.md?
 
@@ -33,4 +31,56 @@
 ## Entry 8 - 2026-04-03 20:15
 
 > ok add time to prompt logging instructions and add a general rule to not create readme files until asked specifically
+
+## Entry 9 - 2026-04-03 20:30
+
+> ok so there is this idea about and API that would serve data from wind farms. I have 3 sqlite databases for that purpose: Kelmarsh - around 8GB Penmanshiel - around 8gb Hill of Towie - around 30gb  So they are quite big but still able to work comfortably on a PC but in case of cloud computing it could be a limiting factor. At least from perspective of as little cost as possible.  There is this type of file called parquet that is significantly smaller than sqlite db but from API perspective - would it be better to create a storage space in the cloud and store parquet file in comparison to storing sqlite files with indexing on datetime column. Idea of a query is a time based event that was preselected but user would be able to decide how much time before and after the event he/she/it, as we are also talking about scrapping this data in automated manner, would like to select and get access to. Write two files with instructions that would be readable for human and llm model to be implemented. Create instructions directory for that purpose
+
+## Entry 10 - 2026-04-03 20:45
+
+> ok add to general rules that execution of python -c " is forbidden. Every piece of code has to have separate file in scripts directory
+
+## Entry 11 - 2026-04-03 20:50
+
+> ok, there was a mention in C:\Users\adamc\PycharmProjects\windfarmdata\.github\copilot-instructions.md that every prompt should be saved to prompts.md
+
+## Entry 12 - 2026-04-03 21:00
+
+> ok so in this directory C:\Users\adamc\PycharmProjects\data_by_turbine — backup there is data for penmanshiel and kelmarsh. Kelmarsh has 1 file more kelmarsh_status_by_turbine_duration that has fixed duration column. It's calculated based on next event. So create parquet files in data/[wind farm name] directories. When converting to parquet fix the duration column in penmanshiel data. For Kelmarsh create parquet files only from kelmarsh_status_by_turbine_duration and not from kelmarsh_status_by_turbine
+
+## Entry 13 - 2026-04-03 21:10
+
+> run scripts/convert_to_parquet.py
+
+## Entry 14 - 2026-04-03 21:15
+
+> run it execute the command in terminal
+
+## Entry 15 - 2026-04-03 21:20
+
+> ok so data directory contains files with parquet files but i don't know from which database they were created - how do I visualize this data?
+
+## Entry 16 - 2026-04-03 21:25
+
+> ok so rename all the files and include status as prefix to file names
+
+## Entry 17 - 2026-04-03 21:30
+
+> ok cool now transform two files to parquet: C:\Users\adamc\PycharmProjects\data_by_turbine — backup\kelmarsh_data_by_turbine.db and C:\Users\adamc\PycharmProjects\data_by_turbine — backup\penmanshiel_data_by_turbine.db
+
+## Entry 18 - 2026-04-03 21:35
+
+> you didn't record your last prompt in prompts file
+
+## Entry 19 - 2026-04-03 21:40
+
+> Ok i need also hill of towie data farm, I've converted the database earlier. Parquet files for hill of towie wind farm is located in C:\Users\adamc\PycharmProjects\windhilloftowiefarm\data\parquet directory. Copy it to data/hill_of_towie directory
+
+## Entry 20 - 2026-04-03 21:45
+
+> ok, now - to the API part - I want the first endpoint in the API to be the one that displays 3 names of the wind farms Kelmarsh, Penmanshiel and Hill of Towie which are corresponding to directories in data directory
+
+## Entry 21 - 2026-04-03 21:50
+
+> ok, cool, now, commit the changes but exclude data directory
 

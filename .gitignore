@@ -15,3 +15,5 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Data files (large parquet files — not tracked in git)
+data/

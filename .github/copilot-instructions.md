@@ -8,7 +8,8 @@
 ## Script Execution
 
 - **Never run code directly in the terminal.**
-- Instead, create a `scripts/` directory in the project root and write any executable logic as script files there (e.g., `scripts/migrate.py`, `scripts/seed_db.sh`, `scripts/build.ps1`).
+- **Never use `python -c "..."` or any inline code execution** — this is strictly forbidden.
+- Every piece of executable code must exist as its own file inside the `scripts/` directory (e.g., `scripts/migrate.py`, `scripts/seed_db.sh`, `scripts/build.ps1`).
 - Scripts should be clearly named and self-contained so they can be run manually by the user later.
 
 ## Prompt Logging
