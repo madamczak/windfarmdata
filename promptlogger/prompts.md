@@ -22,3 +22,7 @@
 
 > ok I moved .md files to promptlogger directory
 
+## Entry 6 - 2026-04-03
+
+> create a git repository for this project
+
