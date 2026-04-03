@@ -92,3 +92,7 @@
 
 > ok, now, make a change to the endpoint that provide names and make it return name and number of turbines in each collection
 
+## Entry 24 - 2026-04-03 22:05
+
+> add if name == main to the api so I could run it from pycharm
+
