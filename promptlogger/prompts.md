@@ -172,3 +172,7 @@
 
 > ok so there is this report and it's quite ok but zero values are not good values if they occur so often. Most probably zeros are not expected at all so modify the report to include that point of view
 
+## Entry 44 - 2026-04-04
+
+> ok, now add a button and possibility to download a csv of that data
+

@@ -123,23 +123,23 @@
         <div class="report">
           <div class="report-title">
             📊 Data Quality Report
-            <span class="report-subtitle">{{ result.row_count }} rows · {{ result.columns.length }} columns</span>
+            <span class="report-subtitle">{{ result.row_count }} rows · {{ result.columns.length }} columns · "good" = non-null &amp; non-zero</span>
           </div>
           <div class="report-grid">
             <div
               v-for="stat in columnStats"
               :key="stat.col"
               class="stat-card"
-              :class="stat.fillRate < 50 ? 'stat-bad' : stat.fillRate < 90 ? 'stat-warn' : 'stat-ok'"
+              :class="stat.goodRate < 50 ? 'stat-bad' : stat.goodRate < 90 ? 'stat-warn' : 'stat-ok'"
             >
               <div class="stat-col-name" :title="stat.col">{{ stat.col }}</div>
               <div class="stat-bar-wrap">
-                <div class="stat-bar" :style="{ width: stat.fillRate + '%' }"></div>
+                <div class="stat-bar" :style="{ width: stat.goodRate + '%' }"></div>
               </div>
               <div class="stat-numbers">
-                <span class="stat-fill">{{ stat.fillRate }}% filled</span>
-                <span v-if="stat.nullCount"  class="stat-null">{{ stat.nullCount }} null</span>
-                <span v-if="stat.zeroCount"  class="stat-zero">{{ stat.zeroCount }} zero</span>
+                <span class="stat-fill">{{ stat.goodRate }}% good</span>
+                <span v-if="stat.nullCount" class="stat-null">{{ stat.nullCount }} null</span>
+                <span v-if="stat.zeroCount" class="stat-zero">{{ stat.zeroCount }} zero</span>
               </div>
             </div>
           </div>
@@ -313,7 +313,9 @@ const filteredRows = computed(() => {
 
 /**
  * Per-column data quality stats computed from the raw (unfiltered) result rows.
- * For each column: null count, zero count, and fill rate (non-null %).
+ * Nulls AND zeros are both treated as problematic values.
+ * "Good" = non-null AND non-zero.
+ * goodRate drives the colour thresholds and bar width.
  */
 const columnStats = computed(() => {
   if (!result.value) return []
@@ -328,13 +330,14 @@ const columnStats = computed(() => {
       const v = row[ci]
       if (v === null || v === undefined || v === '') {
         nullCount++
-      } else if (v === 0 || v === '0') {
+      } else if (v === 0 || v === '0' || v === 0.0) {
         zeroCount++
       }
     }
-    const filled   = total - nullCount
-    const fillRate = Math.round((filled / total) * 100)
-    return { col, nullCount, zeroCount, fillRate }
+    const badCount  = nullCount + zeroCount
+    const goodCount = total - badCount
+    const goodRate  = Math.round((goodCount / total) * 100)
+    return { col, nullCount, zeroCount, badCount, goodCount, goodRate, total }
   })
 })
 
