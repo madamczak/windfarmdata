@@ -121,20 +121,25 @@ def get_wind_farm_time_ranges() -> WindFarmTimeRangesResponse:
     return WindFarmTimeRangesResponse(time_ranges=results)
 
 
-# Farms that use the data_turbine_N / status_turbine_N naming convention
-# and therefore support the /columns endpoint.
-SCADA_FARMS = ["kelmarsh", "penmanshiel"]
+# Farms supported by the /columns endpoint.
+# Kelmarsh/Penmanshiel use data_turbine_N / status_turbine_N naming.
+# Hill of Towie uses T{NN}_{SensorType} naming — both are handled by
+# get_columns_by_file_type().
+SCADA_FARMS = ["kelmarsh", "penmanshiel", "hill_of_towie"]
 
 
 @router.get(
     "/columns",
     response_model=FarmColumnsResponse,
-    summary="Get column names for Kelmarsh and Penmanshiel",
+    summary="Get column names for all wind farms",
     description=(
-        "Returns the full set of column names for each file type "
-        "(data and status) for the Kelmarsh and Penmanshiel wind farms. "
-        "Column names are read from parquet file metadata only — no row "
-        "data is loaded, so the response is fast regardless of file size."
+        "Returns the full set of column names grouped by file type for "
+        "Kelmarsh, Penmanshiel, and Hill of Towie. "
+        "For Kelmarsh and Penmanshiel the file types are 'data' and 'status'. "
+        "For Hill of Towie the file types are the sensor table names "
+        "(e.g. SCTurbine, AlarmLog, SCTurGrid, etc.). "
+        "Column names are read from parquet metadata only — no row data is "
+        "loaded."
     ),
 )
 def get_wind_farm_columns() -> FarmColumnsResponse:

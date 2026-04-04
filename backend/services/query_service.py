@@ -101,18 +101,23 @@ def get_time_range(farm_dir: str) -> tuple[object, object, str | None]:
 def get_columns_by_file_type(farm_dir: str) -> dict[str, list[str]]:
     """Return column names grouped by file type for all parquet files in farm_dir.
 
-    File types are inferred from filename prefixes.  For Kelmarsh and
-    Penmanshiel the convention is:
+    Supports two naming conventions:
+
+    Kelmarsh / Penmanshiel:
         data_turbine_N.parquet   → file type "data"
         status_turbine_N.parquet → file type "status"
 
-    Only the schema of the first turbine file for each type is read (all
-    turbines share the same schema), so this is extremely fast — no row
-    data is loaded.
+    Hill of Towie:
+        T{NN}_{SensorType}.parquet  → file type is the sensor type suffix,
+        e.g. T01_SCTurbine.parquet  → "SCTurbine"
+             T01_AlarmLog.parquet   → "AlarmLog"
 
-    Returns a dict mapping file_type → sorted list of column names.
+    Only the schema of the first file encountered for each type is read (all
+    turbines share the same schema), so this is fast — no row data is loaded.
+
+    Returns a dict mapping file_type → list of column names.
     Empty dict if the directory contains no parquet files or no recognised
-    file-type prefixes.
+    naming patterns are found.
     """
     parquet_files = sorted(glob.glob(os.path.join(farm_dir, "*.parquet")))
     if not parquet_files:
@@ -122,8 +127,17 @@ def get_columns_by_file_type(farm_dir: str) -> dict[str, list[str]]:
     type_to_file: dict[str, str] = {}
     for path in parquet_files:
         filename = os.path.basename(path)
-        # Match data_turbine_N.parquet or status_turbine_N.parquet
+
+        # Convention 1: data_turbine_N.parquet / status_turbine_N.parquet
         m = re.match(r"^([a-zA-Z]+)_turbine_\d+\.parquet$", filename)
+        if m:
+            file_type = m.group(1)
+            if file_type not in type_to_file:
+                type_to_file[file_type] = path
+            continue
+
+        # Convention 2: T{NN}_{SensorType}.parquet (Hill of Towie)
+        m = re.match(r"^T\d+_([A-Za-z]+)\.parquet$", filename)
         if m:
             file_type = m.group(1)
             if file_type not in type_to_file:
