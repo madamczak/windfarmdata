@@ -148,3 +148,7 @@
 
 > ok, run the backend and frontend app
 
+## Entry 38 - 2026-04-04
+
+> ok looks good but there's an error Cannot detect a timestamp column in C:\Users\adamc\PycharmProjects\windfarmdata\data\kelmarsh\status_turbine_1.parquet
+
