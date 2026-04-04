@@ -108,7 +108,6 @@
             </template>
             rows
           </span>
-          <!-- Global search -->
           <input
             class="global-filter"
             type="search"
@@ -118,6 +117,32 @@
           <button class="btn-clear" @click="clearFilters" title="Clear all filters &amp; sort">
             ✕ Clear filters
           </button>
+        </div>
+
+        <!-- ── Data quality report ──────────────────────────────────── -->
+        <div class="report">
+          <div class="report-title">
+            📊 Data Quality Report
+            <span class="report-subtitle">{{ result.row_count }} rows · {{ result.columns.length }} columns</span>
+          </div>
+          <div class="report-grid">
+            <div
+              v-for="stat in columnStats"
+              :key="stat.col"
+              class="stat-card"
+              :class="stat.fillRate < 50 ? 'stat-bad' : stat.fillRate < 90 ? 'stat-warn' : 'stat-ok'"
+            >
+              <div class="stat-col-name" :title="stat.col">{{ stat.col }}</div>
+              <div class="stat-bar-wrap">
+                <div class="stat-bar" :style="{ width: stat.fillRate + '%' }"></div>
+              </div>
+              <div class="stat-numbers">
+                <span class="stat-fill">{{ stat.fillRate }}% filled</span>
+                <span v-if="stat.nullCount"  class="stat-null">{{ stat.nullCount }} null</span>
+                <span v-if="stat.zeroCount"  class="stat-zero">{{ stat.zeroCount }} zero</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="table-scroll">
@@ -284,6 +309,33 @@ const filteredRows = computed(() => {
   }
 
   return rows
+})
+
+/**
+ * Per-column data quality stats computed from the raw (unfiltered) result rows.
+ * For each column: null count, zero count, and fill rate (non-null %).
+ */
+const columnStats = computed(() => {
+  if (!result.value) return []
+  const { columns, rows } = result.value
+  const total = rows.length
+  if (total === 0) return []
+
+  return columns.map((col, ci) => {
+    let nullCount = 0
+    let zeroCount = 0
+    for (const row of rows) {
+      const v = row[ci]
+      if (v === null || v === undefined || v === '') {
+        nullCount++
+      } else if (v === 0 || v === '0') {
+        zeroCount++
+      }
+    }
+    const filled   = total - nullCount
+    const fillRate = Math.round((filled / total) * 100)
+    return { col, nullCount, zeroCount, fillRate }
+  })
 })
 
 // ── Handlers ───────────────────────────────────────────────────────────────
@@ -515,6 +567,82 @@ input[type="date"]:disabled {
   font-size: 13px;
   font-weight: 500;
 }
+
+/* ── Data quality report ──────────────────────────────────────────────── */
+.report {
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: #fafbfc;
+}
+
+.report-title {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.report-subtitle {
+  font-weight: 400;
+  font-size: 12px;
+  color: #888;
+}
+
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.stat-card {
+  background: #fff;
+  border: 1px solid #e4e7ec;
+  border-radius: 7px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.stat-card.stat-ok   { border-left: 3px solid #38a169; }
+.stat-card.stat-warn { border-left: 3px solid #d69e2e; }
+.stat-card.stat-bad  { border-left: 3px solid #e53e3e; }
+
+.stat-col-name {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #333;
+}
+
+.stat-bar-wrap {
+  height: 5px;
+  background: #e4e7ec;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.stat-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: #4361ee;
+  transition: width .3s;
+}
+.stat-ok   .stat-bar { background: #38a169; }
+.stat-warn .stat-bar { background: #d69e2e; }
+.stat-bad  .stat-bar { background: #e53e3e; }
+
+.stat-numbers {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 10px;
+}
+.stat-fill { color: #555; font-weight: 600; }
+.stat-null { color: #e53e3e; }
+.stat-zero { color: #d69e2e; }
 
 /* ── Results ──────────────────────────────────────────────────────────── */
 .results { display: flex; flex-direction: column; gap: 14px; }
