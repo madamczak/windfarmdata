@@ -117,9 +117,15 @@
           <button class="btn-clear" @click="clearFilters" title="Clear all filters &amp; sort">
             ✕ Clear filters
           </button>
-          <button class="btn-download" @click="downloadCsv" title="Download visible rows as CSV">
-            ⬇ Download CSV
-          </button>
+          <div class="download-group">
+            <select v-model="downloadFormat" class="download-format-select">
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
+            </select>
+            <button class="btn-download" @click="downloadFile">
+              ⬇ Download
+            </button>
+          </div>
         </div>
 
         <!-- ── Data quality report ──────────────────────────────────── -->
@@ -225,10 +231,11 @@ const error   = ref('')
 const result  = ref(null)
 
 // ── Sort & filter state ────────────────────────────────────────────────────
-const globalFilter = ref('')   // global search string
-const colFilters   = ref([])   // per-column filter strings (indexed by column index)
-const sortCol      = ref(null) // column index being sorted, or null
-const sortDir      = ref(1)    // 1 = ascending, -1 = descending
+const globalFilter   = ref('')   // global search string
+const colFilters     = ref([])   // per-column filter strings (indexed by column index)
+const sortCol        = ref(null) // column index being sorted, or null
+const sortDir        = ref(1)    // 1 = ascending, -1 = descending
+const downloadFormat = ref('csv') // 'csv' | 'json'
 
 // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -391,29 +398,46 @@ function clearFilters() {
 }
 
 /**
- * Download the currently visible (filtered + sorted) rows as a CSV file.
+ * Download the currently visible (filtered + sorted) rows as CSV or JSON.
  * Filename includes farm, file type and date for easy identification.
  */
-function downloadCsv() {
+function downloadFile() {
   if (!result.value || filteredRows.value.length === 0) return
 
-  const escape = val => {
-    const s = String(val ?? '')
-    // Wrap in quotes if value contains comma, quote or newline
-    return s.includes(',') || s.includes('"') || s.includes('\n')
-      ? `"${s.replace(/"/g, '""')}"`
-      : s
+  const { farm, file_type, date, columns } = result.value
+  const rows = filteredRows.value
+  const baseName = `${farm}_${file_type}_${date}`
+
+  let content, mimeType, fileName
+
+  if (downloadFormat.value === 'json') {
+    // Array of objects: { "Column Name": value, ... }
+    const objects = rows.map(row =>
+      Object.fromEntries(columns.map((col, i) => [col, row[i] ?? null]))
+    )
+    content  = JSON.stringify(objects, null, 2)
+    mimeType = 'application/json;charset=utf-8;'
+    fileName = `${baseName}.json`
+  } else {
+    // CSV with RFC 4180 escaping
+    const escape = val => {
+      const s = String(val ?? '')
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"`
+        : s
+    }
+    const header = columns.map(escape).join(',')
+    const body   = rows.map(row => row.map(escape).join(',')).join('\n')
+    content  = `${header}\n${body}`
+    mimeType = 'text/csv;charset=utf-8;'
+    fileName = `${baseName}.csv`
   }
 
-  const header = result.value.columns.map(escape).join(',')
-  const body   = filteredRows.value.map(row => row.map(escape).join(',')).join('\n')
-  const csv    = `${header}\n${body}`
-
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const blob = new Blob([content], { type: mimeType })
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
   a.href     = url
-  a.download = `${result.value.farm}_${result.value.file_type}_${result.value.date}.csv`
+  a.download = fileName
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -722,11 +746,31 @@ input[type="date"]:disabled {
 }
 .btn-clear:hover { background: #f0f2f5; }
 
+/* Download group: format selector + button */
+.download-group {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.download-format-select {
+  padding: 7px 8px;
+  border: 1px solid #4361ee;
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  font-size: 13px;
+  background: #fff;
+  color: #4361ee;
+  font-weight: 600;
+  cursor: pointer;
+  height: 34px;
+}
+.download-format-select:focus { outline: none; }
+
 /* Download CSV button */
 .btn-download {
   padding: 7px 14px;
   border: 1px solid #4361ee;
-  border-radius: 6px;
+  border-radius: 0 6px 6px 0;
   background: #4361ee;
   color: #fff;
   font-size: 13px;
@@ -734,6 +778,7 @@ input[type="date"]:disabled {
   cursor: pointer;
   white-space: nowrap;
   transition: background .15s;
+  height: 34px;
 }
 .btn-download:hover { background: #3451d1; }
 
