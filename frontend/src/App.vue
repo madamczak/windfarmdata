@@ -50,7 +50,13 @@
               id="date-input"
               type="date"
               v-model="selectedDate"
+              :min="minDate"
+              :max="maxDate"
+              :disabled="!selectedFarm"
             />
+            <span v-if="minDate && maxDate" class="date-hint">
+              {{ minDate }} → {{ maxDate }}
+            </span>
           </div>
         </div>
 
@@ -127,7 +133,7 @@
  * Uses Vue 3 Composition API with <script setup>.
  */
 import { ref, computed, onMounted } from 'vue'
-import { fetchWindFarms, fetchColumns, fetchDayData } from './api.js'
+import { fetchWindFarms, fetchColumns, fetchDayData, fetchTimeRanges } from './api.js'
 
 // ── State ──────────────────────────────────────────────────────────────────
 
@@ -137,11 +143,14 @@ const farms = ref([])
 /** Columns metadata returned by /wind-farms/columns  { farm, columns_by_type } */
 const columnsMap = ref([])
 
+/** Time ranges per farm: { farm, earliest, latest } */
+const timeRanges = ref([])
+
 const selectedFarm     = ref('')
 const selectedFileType = ref('')
 const selectedDate     = ref('')
-const selectedColumns  = ref([])   // empty = send nothing (all columns)
-const allColumns       = ref(true) // checkbox state
+const selectedColumns  = ref([])
+const allColumns       = ref(true)
 
 const loading = ref(false)
 const error   = ref('')
@@ -163,6 +172,23 @@ const availableColumns = computed(() => {
   return entry?.columns_by_type[selectedFileType.value] ?? []
 })
 
+/** ISO date string (YYYY-MM-DD) for the earliest record in the selected farm */
+const minDate = computed(() => {
+  if (!selectedFarm.value) return ''
+  const tr = timeRanges.value.find(t => t.farm === selectedFarm.value)
+  if (!tr?.earliest) return ''
+  // earliest may be "2016-01-03 00:00:00" or "2016-01-03T00:00:00+0000"
+  return tr.earliest.slice(0, 10)
+})
+
+/** ISO date string (YYYY-MM-DD) for the latest record in the selected farm */
+const maxDate = computed(() => {
+  if (!selectedFarm.value) return ''
+  const tr = timeRanges.value.find(t => t.farm === selectedFarm.value)
+  if (!tr?.latest) return ''
+  return tr.latest.slice(0, 10)
+})
+
 /** True only when all required fields are filled */
 const canFetch = computed(() =>
   selectedFarm.value &&
@@ -177,6 +203,9 @@ function onFarmChange() {
   selectedColumns.value  = []
   result.value           = null
   error.value            = ''
+  // Auto-set date to the first available date for this farm
+  const tr = timeRanges.value.find(t => t.farm === selectedFarm.value)
+  selectedDate.value = tr?.earliest ? tr.earliest.slice(0, 10) : ''
 }
 
 function onFileTypeChange() {
@@ -217,12 +246,14 @@ async function fetchData() {
 
 onMounted(async () => {
   try {
-    const [farmsData, colsData] = await Promise.all([
+    const [farmsData, colsData, rangesData] = await Promise.all([
       fetchWindFarms(),
       fetchColumns(),
+      fetchTimeRanges(),
     ])
     farms.value      = farmsData
     columnsMap.value = colsData
+    timeRanges.value = rangesData
   } catch (e) {
     error.value = `Could not load farm metadata: ${e.message}`
   }
@@ -305,6 +336,16 @@ select, input[type="date"] {
 select:focus, input[type="date"]:focus {
   outline: 2px solid #4361ee;
   border-color: transparent;
+}
+input[type="date"]:disabled {
+  background: #f0f2f5;
+  color: #aaa;
+  cursor: not-allowed;
+}
+.date-hint {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
 }
 
 /* ── Column picker ────────────────────────────────────────────────────── */

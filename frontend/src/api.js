@@ -17,6 +17,17 @@ export async function fetchWindFarms() {
 }
 
 /**
+ * Fetch earliest/latest timestamps for each farm.
+ * @returns {Promise<Array>}  Array of { farm, earliest, latest, timestamp_column }
+ */
+export async function fetchTimeRanges() {
+  const res = await fetch(`${BASE_URL}/wind-farms/time-ranges`)
+  if (!res.ok) throw new Error(`Failed to fetch time ranges: ${res.status}`)
+  const data = await res.json()
+  return data.time_ranges
+}
+
+/**
  * Fetch column names grouped by file type for all farms.
  * @returns {Promise<Array>}  Array of { farm, columns_by_type }
  */

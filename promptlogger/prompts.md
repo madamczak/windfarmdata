@@ -144,3 +144,7 @@
 
 > ok, looks good but I want to be able to select only dates that have data that I could download. Other dates should be disabled and initial data should be the first available in the selected farm dataset
 
+## Entry 37 - 2026-04-04
+
+> ok, run the backend and frontend app
+
