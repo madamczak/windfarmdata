@@ -100,24 +100,64 @@
       <!-- ── Results table ──────────────────────────────────────────── -->
       <section v-if="result" class="results card">
         <div class="results-header">
-          <h2>
-            {{ result.farm }} / {{ result.file_type }} / {{ result.date }}
-          </h2>
-          <span class="row-count">{{ result.row_count.toLocaleString() }} rows</span>
+          <h2>{{ result.farm }} / {{ result.file_type }} / {{ result.date }}</h2>
+          <span class="row-count">
+            {{ filteredRows.length.toLocaleString() }}
+            <template v-if="filteredRows.length !== result.row_count">
+              / {{ result.row_count.toLocaleString() }}
+            </template>
+            rows
+          </span>
+          <!-- Global search -->
+          <input
+            class="global-filter"
+            type="search"
+            v-model="globalFilter"
+            placeholder="🔍 Search all columns…"
+          />
+          <button class="btn-clear" @click="clearFilters" title="Clear all filters &amp; sort">
+            ✕ Clear filters
+          </button>
         </div>
 
         <div class="table-scroll">
           <table>
             <thead>
+              <!-- Row 1: column headers with sort arrows -->
               <tr>
-                <th v-for="col in result.columns" :key="col">{{ col }}</th>
+                <th
+                  v-for="(col, ci) in result.columns"
+                  :key="col"
+                  class="sortable"
+                  @click="setSort(ci)"
+                >
+                  <span class="th-label">{{ col }}</span>
+                  <span class="sort-icon">
+                    <template v-if="sortCol === ci">
+                      {{ sortDir === 1 ? '▲' : '▼' }}
+                    </template>
+                    <template v-else>⇅</template>
+                  </span>
+                </th>
+              </tr>
+              <!-- Row 2: per-column filter inputs -->
+              <tr class="filter-row">
+                <th v-for="(col, ci) in result.columns" :key="'f' + ci">
+                  <input
+                    class="col-filter"
+                    type="text"
+                    :placeholder="'filter…'"
+                    v-model="colFilters[ci]"
+                  />
+                </th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(row, i) in result.rows" :key="i">
-                <td v-for="(cell, j) in row" :key="j">
-                  {{ cell ?? '—' }}
-                </td>
+              <tr v-for="(row, i) in filteredRows" :key="i">
+                <td v-for="(cell, j) in row" :key="j">{{ cell ?? '—' }}</td>
+              </tr>
+              <tr v-if="filteredRows.length === 0">
+                <td :colspan="result.columns.length" class="no-rows">No rows match the current filters.</td>
               </tr>
             </tbody>
           </table>
@@ -155,6 +195,12 @@ const allColumns       = ref(true)
 const loading = ref(false)
 const error   = ref('')
 const result  = ref(null)
+
+// ── Sort & filter state ────────────────────────────────────────────────────
+const globalFilter = ref('')   // global search string
+const colFilters   = ref([])   // per-column filter strings (indexed by column index)
+const sortCol      = ref(null) // column index being sorted, or null
+const sortDir      = ref(1)    // 1 = ascending, -1 = descending
 
 // ── Derived ────────────────────────────────────────────────────────────────
 
