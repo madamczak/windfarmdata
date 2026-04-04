@@ -5,7 +5,9 @@ Wind farms router — endpoints related to wind farm listing and metadata.
 import os
 import glob
 import re
-from fastapi import APIRouter
+from datetime import date
+from typing import Annotated
+from fastapi import APIRouter, HTTPException, Query
 from backend.models.schemas import (
     WindFarm,
     WindFarmsResponse,
@@ -13,9 +15,14 @@ from backend.models.schemas import (
     WindFarmTimeRangesResponse,
     FarmColumns,
     FarmColumnsResponse,
+    DayDataResponse,
 )
 from backend.config import settings
-from backend.services.query_service import get_time_range, get_columns_by_file_type
+from backend.services.query_service import (
+    get_time_range,
+    get_columns_by_file_type,
+    get_data_for_date,
+)
 
 router = APIRouter(prefix="/wind-farms", tags=["Wind Farms"])
 
@@ -163,3 +170,69 @@ def get_wind_farm_columns() -> FarmColumnsResponse:
     return FarmColumnsResponse(farms=farms)
 
 
+# ---------------------------------------------------------------------------
+# Known valid farm directory names — used for path validation
+# ---------------------------------------------------------------------------
+VALID_FARMS = {dir_name for _, dir_name in WIND_FARM_MAP}
+
+
+@router.get(
+    "/{farm}/data/{query_date}",
+    response_model=DayDataResponse,
+    summary="Get data for a specific day",
+    description=(
+        "Returns all rows for the given farm, file type, and calendar date. "
+        "Optionally restrict the response to a subset of columns via the "
+        "`columns` query parameter (repeat the parameter for each column, "
+        "e.g. `?columns=Wind+speed+(m/s)&columns=Power+(kW)`). "
+        "When no columns are supplied every column in the file is returned. "
+        "The timestamp column is always included. "
+        "Use `file_type` to choose between file groups — for Kelmarsh and "
+        "Penmanshiel use `data` or `status`; for Hill of Towie use a sensor "
+        "table name such as `SCTurbine`, `AlarmLog`, `SCTurGrid`, etc."
+    ),
+)
+def get_day_data(
+    farm: str,
+    query_date: date,
+    file_type: Annotated[
+        str,
+        Query(description="File-type group to query, e.g. 'data', 'status', 'SCTurbine'"),
+    ] = "data",
+    columns: Annotated[
+        list[str] | None,
+        Query(description="Column names to include. Omit to return all columns."),
+    ] = None,
+) -> DayDataResponse:
+    """Query parquet files for a single calendar day with optional column selection."""
+    base = os.path.abspath(settings.parquet_base_path)
+
+    # Validate farm name to prevent path traversal
+    if farm not in VALID_FARMS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Farm '{farm}' not found. Valid farms: {sorted(VALID_FARMS)}",
+        )
+
+    farm_dir = os.path.join(base, farm)
+    if not os.path.isdir(farm_dir):
+        raise HTTPException(status_code=404, detail=f"Data directory for '{farm}' not found.")
+
+    try:
+        col_names, rows = get_data_for_date(
+            farm_dir=farm_dir,
+            file_type=file_type,
+            query_date=query_date,
+            columns=columns or None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return DayDataResponse(
+        farm=farm,
+        file_type=file_type,
+        date=query_date.isoformat(),
+        columns=col_names,
+        row_count=len(rows),
+        rows=rows,
+    )

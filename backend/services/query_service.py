@@ -6,6 +6,7 @@ parquet files without loading entire datasets into memory.
 import os
 import glob
 import re
+from datetime import date
 import duckdb
 import pyarrow.parquet as pq
 
@@ -152,4 +153,88 @@ def get_columns_by_file_type(farm_dir: str) -> dict[str, list[str]]:
             result[file_type] = []
 
     return result
+
+
+def _files_for_type(farm_dir: str, file_type: str) -> list[str]:
+    """Return all parquet file paths that belong to the given file_type.
+
+    Supports both naming conventions:
+      - Kelmarsh/Penmanshiel: {file_type}_turbine_N.parquet
+      - Hill of Towie:        T{NN}_{file_type}.parquet
+    """
+    pattern_scada = os.path.join(farm_dir, f"{file_type}_turbine_*.parquet")
+    pattern_hot = os.path.join(farm_dir, f"T*_{file_type}.parquet")
+    files = sorted(glob.glob(pattern_scada) + glob.glob(pattern_hot))
+    return files
+
+
+def get_data_for_date(
+    farm_dir: str,
+    file_type: str,
+    query_date: date,
+    columns: list[str] | None = None,
+) -> tuple[list[str], list[list]]:
+    """Query all parquet files of a given file_type for a single calendar day.
+
+    Parameters
+    ----------
+    farm_dir:    Absolute path to the farm's parquet directory.
+    file_type:   File-type group to query (e.g. "data", "status", "SCTurbine").
+    query_date:  The calendar day to filter on.
+    columns:     Explicit list of column names to return.  When None or empty
+                 all columns are returned.
+
+    Returns
+    -------
+    A tuple of (column_names, rows) where rows is a list of lists.
+    Raises ValueError if no matching files are found or the timestamp column
+    cannot be detected.
+    """
+    files = _files_for_type(farm_dir, file_type)
+    if not files:
+        raise ValueError(
+            f"No parquet files found for file_type '{file_type}' in {farm_dir}"
+        )
+
+    # Detect timestamp column from the first file in the group
+    ts_col = _detect_timestamp_column_from_schema(files[0])
+    if ts_col is None:
+        raise ValueError(
+            f"Cannot detect a timestamp column in {files[0]}"
+        )
+
+    # Build the DuckDB file list
+    file_list = ", ".join(
+        f"'{p.replace(chr(92), '/')}'" for p in files
+    )
+
+    # Build column projection — always include the timestamp column
+    if columns:
+        # Ensure the timestamp column is always present in the projection
+        selected = list(dict.fromkeys([ts_col] + columns))  # deduplicate, preserve order
+        col_sql = ", ".join(f'"{c}"' for c in selected)
+    else:
+        col_sql = "*"
+
+    # Date filter: cast the timestamp column to DATE and compare
+    date_str = query_date.isoformat()  # "YYYY-MM-DD"
+    query = (
+        f"SELECT {col_sql} "
+        f"FROM read_parquet([{file_list}], union_by_name=true) "
+        f'WHERE CAST("{ts_col}" AS DATE) = \'{date_str}\' '
+        f'ORDER BY "{ts_col}"'
+    )
+
+    conn = duckdb.connect()
+    try:
+        rel = conn.execute(query)
+        col_names = [desc[0] for desc in rel.description]
+        rows = rel.fetchall()
+    finally:
+        conn.close()
+
+    # Convert each row to a plain list (handles datetime, Decimal, etc.)
+    serialisable_rows = [list(row) for row in rows]
+    return col_names, serialisable_rows
+
 

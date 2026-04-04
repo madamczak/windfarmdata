@@ -128,3 +128,7 @@
 
 > ok, now, I want to be able to get data for particular date from those datasets but I want the user to be able to select only columns that are desired to be in that data as there are many of them. So now I want an endpoint that would download data for particular day for particular columns but if no columns are selected I want all of them to be returned
 
+## Entry 33 - 2026-04-04
+
+> ok so it takes quite a long time, perform a request that would check if it works
+

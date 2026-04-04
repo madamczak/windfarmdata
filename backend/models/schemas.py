@@ -3,6 +3,7 @@ Pydantic schemas for API request and response models.
 """
 
 from datetime import datetime
+from typing import Any
 from pydantic import BaseModel
 
 
@@ -47,5 +48,16 @@ class FarmColumnsResponse(BaseModel):
     """Response model for the /wind-farms/columns endpoint."""
 
     farms: list[FarmColumns]
+
+
+class DayDataResponse(BaseModel):
+    """Response model for the /wind-farms/{farm}/data/{date} endpoint."""
+
+    farm: str                    # Directory name, e.g. "kelmarsh"
+    file_type: str               # File-type group queried, e.g. "data" or "SCTurbine"
+    date: str                    # ISO date string, e.g. "2021-03-15"
+    columns: list[str]           # Column names in the order they appear in rows
+    row_count: int               # Number of rows returned
+    rows: list[list[Any]]        # Each inner list is one row of values
 
 
