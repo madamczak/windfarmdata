@@ -112,3 +112,7 @@
 
 > ok, commit changes, end of work for today
 
+## Entry 29 - 2026-04-04
+
+> run the server
+
