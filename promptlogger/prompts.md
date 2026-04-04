@@ -120,3 +120,7 @@
 
 > ok, I understand that hill of towie dataset is different so let's focus on kelmarsh and penmanshiel now. I'd like an endpoint that would return a set of column names for kelmarsh and penmanshiel
 
+## Entry 31 - 2026-04-04
+
+> ok now let's add a hill of towie columns to that endpoint
+

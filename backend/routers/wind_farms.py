@@ -6,9 +6,16 @@ import os
 import glob
 import re
 from fastapi import APIRouter
-from backend.models.schemas import WindFarm, WindFarmsResponse, TimeRange, WindFarmTimeRangesResponse
+from backend.models.schemas import (
+    WindFarm,
+    WindFarmsResponse,
+    TimeRange,
+    WindFarmTimeRangesResponse,
+    FarmColumns,
+    FarmColumnsResponse,
+)
 from backend.config import settings
-from backend.services.query_service import get_time_range
+from backend.services.query_service import get_time_range, get_columns_by_file_type
 
 router = APIRouter(prefix="/wind-farms", tags=["Wind Farms"])
 
@@ -112,5 +119,42 @@ def get_wind_farm_time_ranges() -> WindFarmTimeRangesResponse:
         )
 
     return WindFarmTimeRangesResponse(time_ranges=results)
+
+
+# Farms that use the data_turbine_N / status_turbine_N naming convention
+# and therefore support the /columns endpoint.
+SCADA_FARMS = ["kelmarsh", "penmanshiel"]
+
+
+@router.get(
+    "/columns",
+    response_model=FarmColumnsResponse,
+    summary="Get column names for Kelmarsh and Penmanshiel",
+    description=(
+        "Returns the full set of column names for each file type "
+        "(data and status) for the Kelmarsh and Penmanshiel wind farms. "
+        "Column names are read from parquet file metadata only — no row "
+        "data is loaded, so the response is fast regardless of file size."
+    ),
+)
+def get_wind_farm_columns() -> FarmColumnsResponse:
+    """Read parquet schemas and return column names grouped by file type."""
+    base = os.path.abspath(settings.parquet_base_path)
+
+    farms = []
+    for dir_name in SCADA_FARMS:
+        farm_dir = os.path.join(base, dir_name)
+        if not os.path.isdir(farm_dir):
+            continue
+
+        columns_by_type = get_columns_by_file_type(farm_dir)
+        farms.append(
+            FarmColumns(
+                farm=dir_name,
+                columns_by_type=columns_by_type,
+            )
+        )
+
+    return FarmColumnsResponse(farms=farms)
 
 

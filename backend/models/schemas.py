@@ -36,3 +36,16 @@ class WindFarmTimeRangesResponse(BaseModel):
     time_ranges: list[TimeRange]
 
 
+class FarmColumns(BaseModel):
+    """Column names for a single wind farm, grouped by file type."""
+
+    farm: str                              # Directory name, e.g. "kelmarsh"
+    columns_by_type: dict[str, list[str]]  # e.g. {"data": [...], "status": [...]}
+
+
+class FarmColumnsResponse(BaseModel):
+    """Response model for the /wind-farms/columns endpoint."""
+
+    farms: list[FarmColumns]
+
+

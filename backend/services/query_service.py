@@ -5,6 +5,7 @@ parquet files without loading entire datasets into memory.
 
 import os
 import glob
+import re
 import duckdb
 import pyarrow.parquet as pq
 
@@ -95,3 +96,46 @@ def get_time_range(farm_dir: str) -> tuple[object, object, str | None]:
 
     conn.close()
     return overall_earliest, overall_latest, detected_ts_col
+
+
+def get_columns_by_file_type(farm_dir: str) -> dict[str, list[str]]:
+    """Return column names grouped by file type for all parquet files in farm_dir.
+
+    File types are inferred from filename prefixes.  For Kelmarsh and
+    Penmanshiel the convention is:
+        data_turbine_N.parquet   → file type "data"
+        status_turbine_N.parquet → file type "status"
+
+    Only the schema of the first turbine file for each type is read (all
+    turbines share the same schema), so this is extremely fast — no row
+    data is loaded.
+
+    Returns a dict mapping file_type → sorted list of column names.
+    Empty dict if the directory contains no parquet files or no recognised
+    file-type prefixes.
+    """
+    parquet_files = sorted(glob.glob(os.path.join(farm_dir, "*.parquet")))
+    if not parquet_files:
+        return {}
+
+    # Map file_type → first matching file path
+    type_to_file: dict[str, str] = {}
+    for path in parquet_files:
+        filename = os.path.basename(path)
+        # Match data_turbine_N.parquet or status_turbine_N.parquet
+        m = re.match(r"^([a-zA-Z]+)_turbine_\d+\.parquet$", filename)
+        if m:
+            file_type = m.group(1)
+            if file_type not in type_to_file:
+                type_to_file[file_type] = path
+
+    result: dict[str, list[str]] = {}
+    for file_type, path in sorted(type_to_file.items()):
+        try:
+            schema = pq.read_schema(path)
+            result[file_type] = [field.name for field in schema]
+        except Exception:
+            result[file_type] = []
+
+    return result
+
