@@ -117,6 +117,9 @@
           <button class="btn-clear" @click="clearFilters" title="Clear all filters &amp; sort">
             ✕ Clear filters
           </button>
+          <button class="btn-download" @click="downloadCsv" title="Download visible rows as CSV">
+            ⬇ Download CSV
+          </button>
         </div>
 
         <!-- ── Data quality report ──────────────────────────────────── -->
@@ -387,6 +390,34 @@ function clearFilters() {
   sortDir.value      = 1
 }
 
+/**
+ * Download the currently visible (filtered + sorted) rows as a CSV file.
+ * Filename includes farm, file type and date for easy identification.
+ */
+function downloadCsv() {
+  if (!result.value || filteredRows.value.length === 0) return
+
+  const escape = val => {
+    const s = String(val ?? '')
+    // Wrap in quotes if value contains comma, quote or newline
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? `"${s.replace(/"/g, '""')}"`
+      : s
+  }
+
+  const header = result.value.columns.map(escape).join(',')
+  const body   = filteredRows.value.map(row => row.map(escape).join(',')).join('\n')
+  const csv    = `${header}\n${body}`
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = `${result.value.farm}_${result.value.file_type}_${result.value.date}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 async function fetchData() {
   if (!canFetch.value) return
   loading.value = true
@@ -652,8 +683,8 @@ input[type="date"]:disabled {
 
 .results-header {
   display: flex;
-  align-items: baseline;
-  gap: 14px;
+  align-items: center;
+  gap: 12px;
   flex-wrap: wrap;
 }
 .results-header h2 { font-size: 15px; font-weight: 600; }
@@ -663,7 +694,48 @@ input[type="date"]:disabled {
   background: #f0f2f5;
   padding: 3px 9px;
   border-radius: 20px;
+  white-space: nowrap;
 }
+
+/* Global search */
+.global-filter {
+  padding: 7px 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  font-size: 13px;
+  min-width: 220px;
+  flex: 1;
+  max-width: 360px;
+}
+.global-filter:focus { outline: 2px solid #4361ee; border-color: transparent; }
+
+/* Clear filters button */
+.btn-clear {
+  padding: 7px 14px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  color: #555;
+  white-space: nowrap;
+}
+.btn-clear:hover { background: #f0f2f5; }
+
+/* Download CSV button */
+.btn-download {
+  padding: 7px 14px;
+  border: 1px solid #4361ee;
+  border-radius: 6px;
+  background: #4361ee;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s;
+}
+.btn-download:hover { background: #3451d1; }
 
 .table-scroll {
   overflow: auto;
@@ -681,19 +753,44 @@ table {
 thead {
   position: sticky;
   top: 0;
-  z-index: 1;
-  background: #1a1a2e;
-  color: #fff;
+  z-index: 2;
 }
 
-th {
+/* Sort header row */
+thead tr:first-child th {
+  background: #1a1a2e;
+  color: #fff;
   padding: 10px 12px;
   text-align: left;
-  font-weight: 600;
   white-space: nowrap;
   border-right: 1px solid #2d2d4e;
+  user-select: none;
 }
-th:last-child { border-right: none; }
+thead tr:first-child th:last-child { border-right: none; }
+
+th.sortable { cursor: pointer; }
+th.sortable:hover { background: #2d2d4e; }
+.th-label { margin-right: 4px; }
+.sort-icon { font-size: 11px; opacity: .75; }
+
+/* Filter input row */
+thead tr.filter-row th {
+  background: #f0f2f5;
+  padding: 4px 6px;
+  border-right: 1px solid #e4e7ec;
+  border-bottom: 2px solid #d0d5dd;
+}
+thead tr.filter-row th:last-child { border-right: none; }
+
+.col-filter {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid #d0d5dd;
+  border-radius: 4px;
+  font-size: 12px;
+  background: #fff;
+}
+.col-filter:focus { outline: 2px solid #4361ee; border-color: transparent; }
 
 tbody tr:nth-child(even) { background: #f7f8fc; }
 tbody tr:hover { background: #eef1fd; }
@@ -705,5 +802,12 @@ td {
   white-space: nowrap;
 }
 td:last-child { border-right: none; }
+
+.no-rows {
+  text-align: center;
+  color: #888;
+  padding: 24px;
+  font-style: italic;
+}
 </style>
 

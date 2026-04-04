@@ -176,3 +176,7 @@
 
 > ok, now add a button and possibility to download a csv of that data
 
+## Entry 45 - 2026-04-04
+
+> ok, csv is working fine, now I also want a json file to be selected
+
