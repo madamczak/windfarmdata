@@ -242,6 +242,50 @@ const canFetch = computed(() =>
   selectedDate.value
 )
 
+/**
+ * Rows after applying global filter, per-column filters, and sort.
+ * All filtering is case-insensitive string matching.
+ */
+const filteredRows = computed(() => {
+  if (!result.value) return []
+
+  const global = globalFilter.value.trim().toLowerCase()
+  const perCol = colFilters.value.map(f => (f ?? '').trim().toLowerCase())
+
+  let rows = result.value.rows
+
+  // Global filter — row must contain the string in at least one cell
+  if (global) {
+    rows = rows.filter(row =>
+      row.some(cell => String(cell ?? '').toLowerCase().includes(global))
+    )
+  }
+
+  // Per-column filters
+  perCol.forEach((f, ci) => {
+    if (!f) return
+    rows = rows.filter(row =>
+      String(row[ci] ?? '').toLowerCase().includes(f)
+    )
+  })
+
+  // Sort
+  if (sortCol.value !== null) {
+    const ci  = sortCol.value
+    const dir = sortDir.value
+    rows = [...rows].sort((a, b) => {
+      const av = a[ci] ?? ''
+      const bv = b[ci] ?? ''
+      // Numeric sort when both values are numbers
+      const an = parseFloat(av), bn = parseFloat(bv)
+      if (!isNaN(an) && !isNaN(bn)) return (an - bn) * dir
+      return String(av).localeCompare(String(bv)) * dir
+    })
+  }
+
+  return rows
+})
+
 // ── Handlers ───────────────────────────────────────────────────────────────
 
 function onFarmChange() {
@@ -267,6 +311,27 @@ function onAllColumnsToggle() {
   }
 }
 
+/** Toggle sort on a column: none → asc → desc → none */
+function setSort(ci) {
+  if (sortCol.value !== ci) {
+    sortCol.value = ci
+    sortDir.value = 1
+  } else if (sortDir.value === 1) {
+    sortDir.value = -1
+  } else {
+    sortCol.value = null
+    sortDir.value = 1
+  }
+}
+
+/** Clear all filters and sort */
+function clearFilters() {
+  globalFilter.value = ''
+  colFilters.value   = result.value ? Array(result.value.columns.length).fill('') : []
+  sortCol.value      = null
+  sortDir.value      = 1
+}
+
 async function fetchData() {
   if (!canFetch.value) return
   loading.value = true
@@ -281,6 +346,11 @@ async function fetchData() {
       selectedFileType.value,
       cols
     )
+    // Reset sort and filters for the new dataset
+    globalFilter.value = ''
+    colFilters.value   = Array(result.value.columns.length).fill('')
+    sortCol.value      = null
+    sortDir.value      = 1
   } catch (e) {
     error.value = e.message
   } finally {

@@ -164,3 +164,7 @@
 
 > ok so I have an option to select hill of towie wind farm but I get an error: Uncaught (in promise) TypeError: can't access property "length", _ctx.filteredRows is undefined when I select 19.07.2016 and SCTurDigiOut file type
 
+## Entry 42 - 2026-04-04
+
+> ok, cool, I also want a brief report on that data as there are many record with empty data or 0 values across multiple columns so give me a quick report on that above the data table
+
