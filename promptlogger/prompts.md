@@ -160,3 +160,7 @@
 
 > I've discarded previous changes by accident
 
+## Entry 41 - 2026-04-04
+
+> ok so I have an option to select hill of towie wind farm but I get an error: Uncaught (in promise) TypeError: can't access property "length", _ctx.filteredRows is undefined when I select 19.07.2016 and SCTurDigiOut file type
+
