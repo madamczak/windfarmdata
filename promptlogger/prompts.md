@@ -136,3 +136,7 @@
 
 > ok, so I think we are ready to produce some initial frontend design. I want a simple website where user could select a wind farm and a day in form of a calendar then the user would need to select column names or specify that all columns have to be returned. Then after clicking a button data would show up on a website in form of a table.
 
+## Entry 35 - 2026-04-04
+
+> ok, I've stopped everything run backend and frontend app
+
