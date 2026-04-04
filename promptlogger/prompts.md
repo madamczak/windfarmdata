@@ -152,3 +152,7 @@
 
 > ok looks good but there's an error Cannot detect a timestamp column in C:\Users\adamc\PycharmProjects\windfarmdata\data\kelmarsh\status_turbine_1.parquet
 
+## Entry 39 - 2026-04-04
+
+> ok, cool, but I want to be able to sort and filter the data on the frontend
+

@@ -12,8 +12,10 @@ import pyarrow.parquet as pq
 
 # Candidate column names for the timestamp, tried in order (case-insensitive match)
 TIMESTAMP_COLUMN_CANDIDATES = [
-    "Date and time",  # Kelmarsh / Penmanshiel data files
-    "TimeStamp",      # Hill of Towie SCADA files
+    "Date and time",    # Kelmarsh / Penmanshiel data files
+    "Timestamp start",  # Kelmarsh / Penmanshiel status files
+    "Timestamp end",    # Kelmarsh / Penmanshiel status files (fallback)
+    "TimeStamp",        # Hill of Towie SCADA files
     "timestamp",
     "Timestamp",
     "time",
