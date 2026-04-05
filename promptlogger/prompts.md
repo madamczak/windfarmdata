@@ -224,6 +224,10 @@
 
 > CORS error: blocked cross-origin request to http://127.0.0.1:8000/wind-farms — fix CORS so app works both in Docker and local dev
 
+## Entry 57 - 2026-04-05 15:30
+
+> ok so now let's add also some performance tests so that there could be another CI threshold that performance should not drop by more than 5% compared to previous build. Of course the first run will set the threshold for now
+
 
 ## Entry 52 - 2026-04-05 12:30
 
