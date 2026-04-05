@@ -6,6 +6,7 @@ Run locally with:
 """
 
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -25,13 +26,31 @@ logging.basicConfig(
 logger = logging.getLogger("windfarm.main")
 
 # ---------------------------------------------------------------------------
+# CORS origins — configurable via CORS_ORIGINS env var (comma-separated).
+# Defaults cover local Vite dev server and the Docker Nginx container.
+# In production set CORS_ORIGINS to your real frontend domain.
+# ---------------------------------------------------------------------------
+_default_origins = [
+    "http://localhost:5173",   # Vite dev server
+    "http://127.0.0.1:5173",   # Vite dev server (IP)
+    "http://localhost:80",     # Docker Nginx
+    "http://localhost",        # Docker Nginx (no explicit port)
+]
+_env_origins = os.environ.get("CORS_ORIGINS", "")
+CORS_ORIGINS = (
+    [o.strip() for o in _env_origins.split(",") if o.strip()]
+    if _env_origins
+    else _default_origins
+)
+
+# ---------------------------------------------------------------------------
 # Lifespan — startup / shutdown logging
 # ---------------------------------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Wind Farm Data API starting up — version %s", app.version)
-    logger.debug("CORS origins: %s", ["http://localhost:5173", "http://127.0.0.1:5173"])
+    logger.debug("CORS origins: %s", CORS_ORIGINS)
     yield
     logger.info("Wind Farm Data API shutting down.")
 
@@ -50,11 +69,11 @@ app = FastAPI(
 )
 
 # ---------------------------------------------------------------------------
-# CORS — allow the Vue dev server (port 5173) to call the API
+# CORS — origins controlled by CORS_ORIGINS (see top of file)
 # ---------------------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

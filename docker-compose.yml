@@ -33,6 +33,9 @@ services:
     environment:
       # Override the default parquet base path if needed
       PARQUET_BASE_PATH: /app/data
+      # Allow requests from the Nginx frontend container.
+      # In production replace with your real frontend domain.
+      CORS_ORIGINS: "http://localhost,http://localhost:80"
 
     ports:
       # Expose directly for development; in production only Nginx needs access

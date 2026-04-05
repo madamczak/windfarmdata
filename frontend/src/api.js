@@ -1,9 +1,16 @@
 /**
  * api.js — thin wrapper around the Wind Farm Data API.
- * All requests go to the FastAPI backend running on port 8000.
+ *
+ * BASE_URL is intentionally empty (relative) so that:
+ *  - In Docker:     Nginx on port 80 proxies /wind-farms → backend:8000
+ *  - In local dev:  Vite dev server proxies /wind-farms → 127.0.0.1:8000
+ *                   (see vite.config.js proxy config)
+ *
+ * This avoids all CORS issues because the browser always talks to the same
+ * origin that served the page.
  */
 
-const BASE_URL = 'http://127.0.0.1:8000'
+const BASE_URL = ''
 
 /**
  * Fetch the list of available wind farms.
