@@ -225,6 +225,20 @@ def get_wind_farm_columns() -> FarmColumnsResponse:
 # ---------------------------------------------------------------------------
 VALID_FARMS = {dir_name for _, dir_name in WIND_FARM_MAP}
 
+# Known valid file types per farm.
+# These must match the naming conventions used by the parquet files on disk.
+# Kelmarsh / Penmanshiel: <file_type>_turbine_N.parquet
+# Hill of Towie:          T{N}_<file_type>.parquet
+VALID_FILE_TYPES: dict[str, set[str]] = {
+    "kelmarsh": {"data", "status"},
+    "penmanshiel": {"data", "status"},
+    "hill_of_towie": {
+        "AlarmLog", "DailySummary", "SCTurbine", "SCTurCount",
+        "SCTurDigiIn", "SCTurDigiOut", "SCTurFlag", "SCTurGrid",
+        "SCTurIntern", "SCTurPress", "SCTurTemp",
+    },
+}
+
 
 @router.get(
     "/{farm}/data/{query_date}",
@@ -272,6 +286,21 @@ def get_day_data(
         raise HTTPException(
             status_code=404,
             detail=f"Farm '{farm}' not found. Valid farms: {sorted(VALID_FARMS)}",
+        )
+
+    # Validate file_type before hitting the filesystem — must be a known type for this farm
+    valid_types = VALID_FILE_TYPES.get(farm, set())
+    if file_type not in valid_types:
+        logger.warning(
+            "get_day_data: rejected unknown file_type='%s' for farm='%s' (valid: %s)",
+            file_type, farm, sorted(valid_types),
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unknown file_type '{file_type}' for farm '{farm}'. "
+                f"Valid types: {sorted(valid_types)}"
+            ),
         )
 
     farm_dir = os.path.join(base, farm)

@@ -204,6 +204,10 @@
 
 > Change remote branch from https://github.com/<your-username>/windfarmdata.git to https://github.com/madamczak/windfarmdata.git
 
+## Entry 52 - 2026-04-05 13:00
+
+> there is a failure as there is no data on the remote — test_invalid_file_type_returns_400 gets 404 instead of 400 because the directory check fires before file_type validation
+
 ## Entry 52 - 2026-04-05 12:30
 
 > ok, so now every push is made to the repo, tests are being executed, let's test that - add 1 empty line to whatever file and commit and push it
