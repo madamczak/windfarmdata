@@ -220,6 +220,10 @@
 
 > also dockerize this app, skip data directory and create a dockerfile
 
+## Entry 56 - 2026-04-05 15:00
+
+> CORS error: blocked cross-origin request to http://127.0.0.1:8000/wind-farms — fix CORS so app works both in Docker and local dev
+
 
 ## Entry 52 - 2026-04-05 12:30
 
