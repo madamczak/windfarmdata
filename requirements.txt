@@ -6,6 +6,7 @@ uvicorn[standard]
 pydantic-settings
 duckdb
 pytest
+pytest-cov
 httpx
 flake8
 

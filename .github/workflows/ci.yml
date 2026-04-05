@@ -72,9 +72,19 @@ jobs:
             --max-line-length=100 \
             --statistics
 
-      - name: Run pytest
+      - name: Run pytest with coverage
         run: |
-          pytest --tb=short -q
+          # pytest.ini already wires in --cov=backend --cov-fail-under=88.
+          # We add --cov-report=xml here for the artefact upload.
+          pytest --tb=short -q --cov-report=xml:coverage.xml
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-py${{ matrix.python-version }}
+          path: coverage.xml
+          retention-days: 14
 
       - name: Upload test results (on failure)
         if: failure()
