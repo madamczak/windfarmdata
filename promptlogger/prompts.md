@@ -184,3 +184,7 @@
 
 > ok, commit changes end of work for today
 
+## Entry 47 - 2026-04-05 00:00
+
+> ok so there are few endpoints already add tests directory and create tests in pytest there
+
