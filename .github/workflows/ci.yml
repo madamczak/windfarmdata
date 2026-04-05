@@ -113,6 +113,7 @@ jobs:
             --benchmark-min-rounds=5 \
             --benchmark-disable-gc \
             --benchmark-sort=mean \
+            --no-cov \
             -v
 
       - name: Check for performance regressions (5 % threshold)
