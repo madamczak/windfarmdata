@@ -228,6 +228,10 @@
 
 > ok so now let's add also some performance tests so that there could be another CI threshold that performance should not drop by more than 5% compared to previous build. Of course the first run will set the threshold for now
 
+## Entry 58 - 2026-04-05 16:00
+
+> FAIL Required test coverage of 88% not reached. Total coverage: 64.26% — coverage should not run during performance benchmarks
+
 
 ## Entry 52 - 2026-04-05 12:30
 
