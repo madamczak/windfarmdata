@@ -192,3 +192,7 @@
 
 > ok, I don't know if there is logging in the endpoint functions, add extensive logging there
 
+## Entry 49 - 2026-04-05 11:00
+
+> ok now as I have tests and I have automated commits I can test every commit I make, cool. Now I want to use that to my advantage and create a initial continous integration system. I want something that works with github the best
+
