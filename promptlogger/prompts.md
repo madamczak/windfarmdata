@@ -216,6 +216,10 @@
 
 > ok, create a terraform script that would create a s3 bucket. I don't have terraform installed just yet, just create the script don't run it
 
+## Entry 55 - 2026-04-05 14:30
+
+> also dockerize this app, skip data directory and create a dockerfile
+
 
 ## Entry 52 - 2026-04-05 12:30
 
