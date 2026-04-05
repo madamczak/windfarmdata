@@ -17,3 +17,11 @@ Thumbs.db
 
 # Data files (large parquet files — not tracked in git)
 data/
+
+# Benchmark result JSON files — stored as CI artefacts, not in git
+# The .gitkeep file keeps the directory itself tracked.
+.benchmarks/*.json
+.benchmarks/Linux*/
+.benchmarks/Windows*/
+.benchmarks/Darwin*/
+

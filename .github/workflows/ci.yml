@@ -1,52 +1,38 @@
 # Wind Farm Data API — Continuous Integration
 #
-# Runs on every push and pull-request that targets main/master.
 # Jobs:
-#   backend  — install Python deps, lint with flake8, run pytest
-#   frontend — install Node deps, build with Vite
-#
-# The data/ directory is in .gitignore and is never uploaded to GitHub,
-# so backend tests that hit the real parquet files are automatically
-# skipped by the integration-test fixtures (they guard with pytest.skip
-# when no farm data is present).  Pure unit tests and validation tests
-# always run.
+#   backend     — lint with flake8, run pytest + coverage (88% threshold)
+#   performance — run pytest-benchmark, compare against previous baseline (5% threshold)
+#   frontend    — build with Vite
 
 name: CI
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
   pull_request:
-    branches:
-      - main
-      - master
+    branches: [main, master]
 
-# Cancel any in-progress run for the same branch when a new commit is pushed.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Backend — lint + test
+  # Backend — lint + test + coverage
   # ---------------------------------------------------------------------------
   backend:
     name: Backend (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -59,24 +45,11 @@ jobs:
 
       - name: Lint with flake8
         run: |
-          # Stop the build on syntax errors or undefined names (E9xx, F63x, F7xx, F82x).
-          # Treat everything else as a warning (exit-zero) so style issues don't block CI.
-          flake8 backend/ tests/ \
-            --count \
-            --select=E9,F63,F7,F82 \
-            --show-source \
-            --statistics
-          flake8 backend/ tests/ \
-            --count \
-            --exit-zero \
-            --max-line-length=100 \
-            --statistics
+          flake8 backend/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 backend/ tests/ --count --exit-zero --max-line-length=100 --statistics
 
       - name: Run pytest with coverage
-        run: |
-          # pytest.ini already wires in --cov=backend --cov-fail-under=88.
-          # We add --cov-report=xml here for the artefact upload.
-          pytest --tb=short -q --cov-report=xml:coverage.xml
+        run: pytest --tb=short -q --cov-report=xml:coverage.xml
 
       - name: Upload coverage report
         if: always()
@@ -94,12 +67,84 @@ jobs:
           path: .pytest_cache/
 
   # ---------------------------------------------------------------------------
+  # Performance — benchmark with 5 % regression threshold
+  #
+  # Strategy:
+  #   1. Download benchmark results from the previous run (artefact: benchmark-baseline).
+  #      First run has no baseline → comparison is skipped, exits 0.
+  #   2. Run pytest-benchmark → benchmark-current.json.
+  #   3. scripts/check_benchmark_regression.py compares the two.
+  #      Any benchmark > 5 % slower fails the job.
+  #   4. Upload current results as the new baseline for the next run.
+  #
+  # Only runs on Python 3.12 so timing comparisons are apples-to-apples.
+  # ---------------------------------------------------------------------------
+  performance:
+    name: Performance benchmarks (Python 3.12)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # continue-on-error so the first run (no artefact yet) still passes
+      - name: Download previous benchmark baseline
+        id: download_baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-baseline
+          path: .benchmarks/baseline/
+        continue-on-error: true
+
+      - name: Run benchmarks
+        run: |
+          pytest tests/test_performance.py \
+            --benchmark-only \
+            --benchmark-json=.benchmarks/benchmark-current.json \
+            --benchmark-min-rounds=5 \
+            --benchmark-disable-gc \
+            --benchmark-sort=mean \
+            -v
+
+      - name: Check for performance regressions (5 % threshold)
+        run: |
+          python scripts/check_benchmark_regression.py \
+            --baseline .benchmarks/baseline/benchmark-baseline.json \
+            --current  .benchmarks/benchmark-current.json \
+            --threshold 5.0
+
+      - name: Upload new baseline
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-baseline
+          path: .benchmarks/benchmark-current.json
+          overwrite: true
+          retention-days: 90
+
+      - name: Upload benchmark history
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-run-${{ github.run_number }}
+          path: .benchmarks/benchmark-current.json
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
   # Frontend — build
   # ---------------------------------------------------------------------------
   frontend:
     name: Frontend (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
-
     strategy:
       fail-fast: false
       matrix:
@@ -110,11 +155,9 @@ jobs:
         working-directory: frontend
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
