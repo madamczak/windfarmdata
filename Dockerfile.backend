@@ -1,0 +1,66 @@
+# =============================================================================
+# Dockerfile.backend — Wind Farm Data API (FastAPI + Uvicorn)
+#
+# Build:
+#   docker build -f Dockerfile.backend -t windfarmdata-backend .
+#
+# Run standalone (mount your local data/ directory):
+#   docker run -p 8000:8000 -v "$(pwd)/data:/app/data:ro" windfarmdata-backend
+# =============================================================================
+
+# --------------------------------------------------------------------------
+# Stage 1 — dependency install (cached separately from source code)
+# --------------------------------------------------------------------------
+FROM python:3.12-slim AS deps
+
+WORKDIR /app
+
+# Install only what is needed to build Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gcc \
+        libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first so Docker layer cache is reused on code-only changes
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip \
+ && pip install --no-cache-dir -r requirements.txt
+
+# --------------------------------------------------------------------------
+# Stage 2 — runtime image
+# --------------------------------------------------------------------------
+FROM python:3.12-slim AS runtime
+
+WORKDIR /app
+
+# Copy installed packages from the deps stage
+COPY --from=deps /usr/local/lib/python3.12 /usr/local/lib/python3.12
+COPY --from=deps /usr/local/bin /usr/local/bin
+
+# Copy application source (data/ is excluded via .dockerignore)
+COPY backend/ ./backend/
+
+# The data directory is expected to be mounted at runtime via a Docker volume.
+# Create an empty placeholder so the app starts without error when no volume
+# is mounted (all farms will simply report no data).
+RUN mkdir -p /app/data
+
+# Non-root user for security
+RUN useradd --create-home --shell /bin/bash appuser \
+ && chown -R appuser:appuser /app
+USER appuser
+
+# Expose the Uvicorn port
+EXPOSE 8000
+
+# Health check — hits the /wind-farms endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/wind-farms')" || exit 1
+
+# Start Uvicorn (1 worker for dev; increase --workers for production)
+CMD ["uvicorn", "backend.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--workers", "1", \
+     "--log-level", "info"]
+

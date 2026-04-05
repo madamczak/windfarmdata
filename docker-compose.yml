@@ -1,0 +1,75 @@
+# =============================================================================
+# docker-compose.yml — Wind Farm Data (backend + frontend)
+#
+# Usage:
+#   # Start everything (mounts local data/ as read-only into backend)
+#   docker compose up --build
+#
+#   # Rebuild only the backend after a code change
+#   docker compose up --build backend
+#
+#   # Stop and remove containers (data volume is preserved)
+#   docker compose down
+#
+# The local data/ directory is mounted read-only into the backend container.
+# No parquet files are baked into the image.
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Backend — FastAPI served by Uvicorn
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: windfarmdata-backend
+
+    # Mount the local data directory read-only — nothing is copied into the image
+    volumes:
+      - ./data:/app/data:ro
+
+    environment:
+      # Override the default parquet base path if needed
+      PARQUET_BASE_PATH: /app/data
+
+    ports:
+      # Expose directly for development; in production only Nginx needs access
+      - "8000:8000"
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/wind-farms')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Frontend — Vite build served by Nginx
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: windfarmdata-frontend
+
+    ports:
+      - "80:80"
+
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+

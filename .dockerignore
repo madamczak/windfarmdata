@@ -1,0 +1,57 @@
+# =============================================================================
+# .dockerignore — files/directories excluded from the Docker build context
+#
+# Keeps the image small and prevents secrets from leaking into layers.
+# =============================================================================
+
+# ---- Data (never baked into the image — mounted as a volume at runtime) ----
+data/
+
+# ---- Python virtual environment ----
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ---- Test / CI artefacts ----
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ---- Frontend build output and node_modules ----
+frontend/node_modules/
+frontend/dist/
+
+# ---- Git ----
+.git/
+.gitignore
+
+# ---- IDE / editor ----
+.idea/
+.vscode/
+*.iml
+
+# ---- OS noise ----
+.DS_Store
+Thumbs.db
+
+# ---- Terraform (not needed in Docker image) ----
+terraform/
+
+# ---- Secrets / environment files ----
+.env
+*.env
+*.tfvars
+
+# ---- Docs / scripts not needed at runtime ----
+scripts/
+instructions/
+promptlogger/
+
