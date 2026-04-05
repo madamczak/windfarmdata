@@ -2,7 +2,10 @@
 Stage all changes (excluding data/ which is in .gitignore) and commit.
 
 Usage:
-    # Manual commit with a specific message:
+    # Positional message (no flag needed):
+    python scripts/git_commit.py "your commit message"
+
+    # Flag-style message:
     python scripts/git_commit.py -m "your commit message"
 
     # Pre-change snapshot (auto-generates a timestamped message):
@@ -44,11 +47,19 @@ if __name__ == "__main__":
         "-m", "--message",
         type=str,
         default=None,
-        help="Commit message. If omitted, a timestamped snapshot message is used.",
+        help="Commit message (flag form). If omitted, a timestamped snapshot message is used.",
+    )
+    parser.add_argument(
+        "positional_message",
+        nargs="?",
+        default=None,
+        help="Commit message (positional form — alternative to -m).",
     )
     args = parser.parse_args()
 
-    message = truncate(args.message) if args.message else build_default_message()
+    # Prefer -m/--message; fall back to positional; then auto-generate.
+    raw_message = args.message or args.positional_message
+    message = truncate(raw_message) if raw_message else build_default_message()
 
     steps = [
         (["git", "add", "-A"], "Staging all changes..."),
