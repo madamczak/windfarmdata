@@ -84,29 +84,26 @@ class TestColumns:
                 )
 
     def test_kelmarsh_and_penmanshiel_have_data_and_status_types(
-        self, client: TestClient
+        self, mock_client: TestClient
     ):
         """Kelmarsh and Penmanshiel must expose at least 'data' and 'status' file types."""
-        data = client.get("/wind-farms/columns").json()
+        data = mock_client.get("/wind-farms/columns").json()
         farm_map = {e["farm"]: e["columns_by_type"] for e in data["farms"]}
 
         for farm, expected in EXPECTED_TYPES.items():
-            if farm not in farm_map:
-                pytest.skip(f"Farm '{farm}' not present in response — skipping")
+            assert farm in farm_map, f"Farm '{farm}' not present in response"
             actual_types = set(farm_map[farm].keys())
             missing = expected - actual_types
             assert not missing, (
                 f"Farm '{farm}' is missing file types: {missing}"
             )
 
-    def test_hill_of_towie_has_at_least_one_file_type(self, client: TestClient):
+    def test_hill_of_towie_has_at_least_one_file_type(self, mock_client: TestClient):
         """Hill of Towie must expose at least one sensor file type."""
-        data = client.get("/wind-farms/columns").json()
+        data = mock_client.get("/wind-farms/columns").json()
         farm_map = {e["farm"]: e["columns_by_type"] for e in data["farms"]}
 
-        if HOT_FARM not in farm_map:
-            pytest.skip("Hill of Towie not present in response — skipping")
-
+        assert HOT_FARM in farm_map, "Hill of Towie not present in response"
         assert len(farm_map[HOT_FARM]) > 0, (
             "Hill of Towie has no file types in columns_by_type"
         )
