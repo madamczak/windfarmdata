@@ -1,0 +1,23 @@
+# terraform.tfvars — local variable values (DO NOT commit to git if this
+# contains sensitive values such as account IDs or real bucket names)
+#
+# Copy this file, fill in the values, and run:
+#   terraform plan -var-file="terraform.tfvars"
+#   terraform apply -var-file="terraform.tfvars"
+
+aws_region  = "eu-west-1"
+
+# Must be globally unique — add a suffix like your AWS account ID or org name
+bucket_name = "windfarmdata-parquet-prod"
+
+cors_allowed_origins = [
+  "http://localhost:5173",    # local Vite dev server
+  # "https://your-frontend-domain.com",  # uncomment for production
+]
+
+common_tags = {
+  Project     = "windfarmdata"
+  ManagedBy   = "terraform"
+  Environment = "production"
+}
+

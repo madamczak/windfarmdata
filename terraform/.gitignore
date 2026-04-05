@@ -1,0 +1,15 @@
+# Terraform state files — contain sensitive resource data, never commit
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+
+# Terraform plan output — may contain secrets
+*.tfplan
+
+# Real tfvars with secrets — use terraform.tfvars.example as a template
+terraform.tfvars
+
+# Terraform working directory
+.terraform/
+.terraform.lock.hcl
+
