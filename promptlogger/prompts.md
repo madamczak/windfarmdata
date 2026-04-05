@@ -188,3 +188,7 @@
 
 > ok so there are few endpoints already add tests directory and create tests in pytest there
 
+## Entry 48 - 2026-04-05 10:00
+
+> ok, I don't know if there is logging in the endpoint functions, add extensive logging there
+
