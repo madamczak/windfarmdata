@@ -212,6 +212,11 @@
 
 > ok so I would also add a rule as a ci threshold that all new code should be tested and coverage should not drop more than 1% in each commit
 
+## Entry 54 - 2026-04-05 14:00
+
+> ok, create a terraform script that would create a s3 bucket. I don't have terraform installed just yet, just create the script don't run it
+
+
 ## Entry 52 - 2026-04-05 12:30
 
 > ok, so now every push is made to the repo, tests are being executed, let's test that - add 1 empty line to whatever file and commit and push it
