@@ -7,4 +7,5 @@ pydantic-settings
 duckdb
 pytest
 httpx
+flake8
 

@@ -196,3 +196,7 @@
 
 > ok now as I have tests and I have automated commits I can test every commit I make, cool. Now I want to use that to my advantage and create a initial continous integration system. I want something that works with github the best
 
+## Entry 50 - 2026-04-05 11:30
+
+> there is a problem with remote branch which was added as remote add origin https://github.com/<your-username>/windfarmdata.git change it to https://github.com/madamczak/windfarmdata.git
+

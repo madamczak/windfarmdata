@@ -1,0 +1,30 @@
+[flake8]
+# Hard errors only — syntax errors, undefined names
+# (the CI also runs a softer pass with --exit-zero for style warnings)
+max-line-length = 100
+
+# Directories and files to ignore
+exclude =
+    .venv,
+    venv,
+    env,
+    __pycache__,
+    .git,
+    data,
+    frontend,
+    scripts,
+    *.egg-info
+
+# Rules that are too noisy or conflict with Black/common patterns
+extend-ignore =
+    # line too long — handled by max-line-length above
+    E501,
+    # whitespace before ':'  (conflicts with type-hint slices)
+    E203,
+    # module level import not at top of file (common in __init__.py re-exports)
+    E402,
+    # do not use bare 'except' — we keep this as a WARNING not an error
+    E722,
+    # ambiguous variable name
+    E741
+

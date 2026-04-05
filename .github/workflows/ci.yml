@@ -1,0 +1,125 @@
+# Wind Farm Data API — Continuous Integration
+#
+# Runs on every push and pull-request that targets main/master.
+# Jobs:
+#   backend  — install Python deps, lint with flake8, run pytest
+#   frontend — install Node deps, build with Vite
+#
+# The data/ directory is in .gitignore and is never uploaded to GitHub,
+# so backend tests that hit the real parquet files are automatically
+# skipped by the integration-test fixtures (they guard with pytest.skip
+# when no farm data is present).  Pure unit tests and validation tests
+# always run.
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+# Cancel any in-progress run for the same branch when a new commit is pushed.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Backend — lint + test
+  # ---------------------------------------------------------------------------
+  backend:
+    name: Backend (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8
+
+      - name: Lint with flake8
+        run: |
+          # Stop the build on syntax errors or undefined names (E9xx, F63x, F7xx, F82x).
+          # Treat everything else as a warning (exit-zero) so style issues don't block CI.
+          flake8 backend/ tests/ \
+            --count \
+            --select=E9,F63,F7,F82 \
+            --show-source \
+            --statistics
+          flake8 backend/ tests/ \
+            --count \
+            --exit-zero \
+            --max-line-length=100 \
+            --statistics
+
+      - name: Run pytest
+        run: |
+          pytest --tb=short -q
+
+      - name: Upload test results (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results-py${{ matrix.python-version }}
+          path: .pytest_cache/
+
+  # ---------------------------------------------------------------------------
+  # Frontend — build
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: Frontend (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20", "22"]
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload build artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-node${{ matrix.node-version }}
+          path: frontend/dist/
+          retention-days: 7
+
