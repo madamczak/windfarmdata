@@ -285,3 +285,7 @@
 
 > ok, I removed kelmarsh and penmanshiel from data directory and now when I run docker compose up --build it does not load anything. Fix it
 
+## Entry 71 - 2026-04-06
+
+> ok, I've fixed env variables now try them
+

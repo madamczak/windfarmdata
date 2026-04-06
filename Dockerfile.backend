@@ -40,15 +40,19 @@ COPY --from=deps /usr/local/bin /usr/local/bin
 # Copy application source (data/ is excluded via .dockerignore)
 COPY backend/ ./backend/
 
-# The data directory is expected to be mounted at runtime via a Docker volume.
-# Create an empty placeholder so the app starts without error when no volume
-# is mounted (all farms will simply report no data).
-RUN mkdir -p /app/data
+# Create directories that may be volume-mounted at runtime.
+# .r2_cache — where parquet files downloaded from R2 are stored.
+# data/     — kept as a fallback placeholder for local mode.
+RUN mkdir -p /app/data /app/.r2_cache
 
 # Non-root user for security
 RUN useradd --create-home --shell /bin/bash appuser \
  && chown -R appuser:appuser /app
 USER appuser
+
+# Ensure the R2 cache volume mount point is writable by appuser at runtime.
+# (Named volumes inherit directory ownership set above.)
+VOLUME ["/app/.r2_cache"]
 
 # Expose the Uvicorn port
 EXPOSE 8000
