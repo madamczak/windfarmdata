@@ -26,8 +26,11 @@ services:
       dockerfile: Dockerfile.backend
     container_name: windfarmdata-backend
 
-    # Load R2 credentials and storage settings from .env file on the host.
-    # Copy .env.example to .env and fill in your R2 credentials before running.
+    # Load R2 credentials and storage settings.
+    # Priority order (highest → lowest):
+    #   1. environment: block below  (hardcoded / always-on values)
+    #   2. Host shell env vars       ($env:R2_ACCESS_KEY_ID etc. in PowerShell)
+    #   3. .env file on disk         (optional convenience – copy .env.example)
     env_file:
       - path: .env
         required: false
@@ -37,11 +40,20 @@ services:
       - r2_cache:/app/.r2_cache
 
     environment:
-      # Use Cloudflare R2 as the storage backend (parquet files served from R2)
+      # Always use R2 as the storage backend in Docker (parquet files in R2)
       STORAGE_BACKEND: "r2"
       # Allow requests from the Nginx frontend container.
       # In production replace with your real frontend domain.
       CORS_ORIGINS: "http://localhost,http://localhost:80"
+      # Pass R2 credentials through from the host shell environment.
+      # In PowerShell set them with:
+      #   $env:R2_ACCESS_KEY_ID      = "your-key"
+      #   $env:R2_SECRET_ACCESS_KEY  = "your-secret"
+      # Listing the key name with no value tells Compose to inherit from host.
+      R2_ACCESS_KEY_ID:
+      R2_SECRET_ACCESS_KEY:
+      R2_ENDPOINT_URL: "https://7cf52f0e0957036ef8b28411ed958be4.r2.cloudflarestorage.com"
+      R2_BUCKET_NAME: "windfarmdata"
 
     ports:
       # Expose directly for development; in production only Nginx needs access
