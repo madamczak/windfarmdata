@@ -35,9 +35,6 @@ services:
       - path: .env
         required: false
 
-    # Persist the R2 download cache across container restarts
-    volumes:
-      - r2_cache:/app/.r2_cache
 
     environment:
       # Always use R2 as the storage backend in Docker (parquet files in R2)
@@ -94,9 +91,4 @@ services:
       retries: 3
       start_period: 10s
 
-# ---------------------------------------------------------------------------
-# Named volumes
-# ---------------------------------------------------------------------------
-volumes:
-  # Persists parquet files downloaded from R2 so they survive container restarts
-  r2_cache:
+# (no named volumes required — R2 data is accessed directly over S3)

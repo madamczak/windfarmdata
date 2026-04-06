@@ -1,20 +1,22 @@
 """
 r2_service.py — Cloudflare R2 integration for the Wind Farm Data API.
 
-Strategy: download-and-cache.
-  • On first access for a farm, all parquet files for that farm are downloaded
-    from R2 into a local cache directory (.r2_cache/<farm>/).
-  • On subsequent requests the cached files are used directly, so DuckDB
-    queries are always run against local paths — no streaming required.
-  • The cache is valid for the lifetime of the process. Restart the server
-    to force a re-download.
+Strategy: direct S3 access via DuckDB httpfs.
+  • Parquet files are NEVER downloaded to local disk.
+  • DuckDB's built-in httpfs extension is used to query files directly from R2
+    over S3 protocol.
+  • `get_farm_prefix(farm)` returns the S3 prefix URL for a farm, e.g.
+    s3://windfarmdata/kelmarsh/
+  • `configure_s3_duckdb(conn)` installs httpfs and sets the R2 credentials on
+    a DuckDB connection so that read_parquet() calls work against S3 URLs.
+  • `list_farm_files(farm, pattern)` uses boto3 (metadata only — no download)
+    to enumerate parquet files in a farm prefix.
 
-The rest of the application (query_service, router) is completely unaware of
-R2 — they just receive a local directory path and work normally.
+The rest of the application (query_service, router) calls these helpers instead
+of working with local filesystem paths when storage_backend == "r2".
 """
 
 import logging
-import os
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -23,12 +25,12 @@ from backend.config import settings
 
 logger = logging.getLogger("windfarm.services.r2_service")
 
-# In-process set of farm prefixes that have already been synced this session
-_synced: set[str] = set()
-
 
 def _build_client():
-    """Create a boto3 S3 client pointing at the configured R2 endpoint."""
+    """Create a boto3 S3 client pointing at the configured R2 endpoint.
+
+    This is used only for listing objects (metadata) — no data is downloaded.
+    """
     return boto3.client(
         "s3",
         endpoint_url=settings.r2_endpoint_url,
@@ -38,44 +40,83 @@ def _build_client():
     )
 
 
-def get_farm_dir(farm: str) -> str:
-    """Return the local directory path for *farm*, downloading from R2 if needed.
+def configure_s3_duckdb(conn) -> None:
+    """Install httpfs and configure S3 credentials on a DuckDB connection.
 
-    This is the single entry point used by the router / query_service.
-    Returns a path to a local directory that contains the farm's parquet files,
-    identical to what the local storage backend would return.
+    Must be called before any read_parquet() query that uses an s3:// URL.
+    This is a cheap operation — DuckDB caches the loaded extension in-process.
     """
-    cache_dir = os.path.abspath(settings.r2_cache_dir)
-    local_farm_dir = os.path.join(cache_dir, farm)
-
-    if farm in _synced:
-        logger.debug("r2_service.get_farm_dir: cache hit for farm='%s'", farm)
-        return local_farm_dir
-
-    # Guard: if credentials are not configured, skip the sync and warn clearly
-    if not settings.r2_access_key_id or not settings.r2_secret_access_key:
-        logger.error(
-            "r2_service.get_farm_dir: R2 credentials not set "
-            "(R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY are empty). "
-            "Create a .env file from .env.example and set your credentials."
-        )
-        os.makedirs(local_farm_dir, exist_ok=True)
-        return local_farm_dir
-
-    logger.info("r2_service.get_farm_dir: syncing farm='%s' from R2", farm)
     try:
-        _sync_farm(farm, local_farm_dir)
-        _synced.add(farm)
-    except (BotoCoreError, ClientError) as exc:
-        logger.error(
-            "r2_service.get_farm_dir: R2 sync failed for farm='%s' — %s. "
-            "Check R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY in your .env file.",
-            farm, exc,
+        conn.execute("INSTALL httpfs;")
+        conn.execute("LOAD httpfs;")
+        conn.execute("SET s3_region = 'auto';")
+        conn.execute(f"SET s3_endpoint = '{_r2_host()}';")
+        conn.execute(f"SET s3_access_key_id = '{settings.r2_access_key_id}';")
+        conn.execute(f"SET s3_secret_access_key = '{settings.r2_secret_access_key}';")
+        # Force path-style URLs — required by Cloudflare R2
+        conn.execute("SET s3_url_style = 'path';")
+        logger.debug("configure_s3_duckdb: httpfs configured for R2 endpoint '%s'", _r2_host())
+    except Exception as exc:
+        logger.error("configure_s3_duckdb: failed to configure httpfs — %s", exc)
+        raise
+
+
+def _r2_host() -> str:
+    """Extract the hostname from the R2 endpoint URL (strip https://)."""
+    url = settings.r2_endpoint_url.rstrip("/")
+    return url.replace("https://", "").replace("http://", "")
+
+
+def get_farm_prefix(farm: str) -> str:
+    """Return the S3 prefix URL for *farm*, e.g. s3://windfarmdata/kelmarsh/.
+
+    This replaces the local directory path used in the 'local' storage backend.
+    """
+    prefix = f"s3://{settings.r2_bucket_name}/{farm}/"
+    logger.debug("get_farm_prefix: farm='%s' → '%s'", farm, prefix)
+    return prefix
+
+
+def list_farm_files(farm: str, pattern: str = "*.parquet") -> list[str]:
+    """Return S3 URLs for all parquet files under *farm* in the R2 bucket.
+
+    Uses boto3 list_objects_v2 (metadata only — no data downloaded).
+    Results are sorted for deterministic ordering.
+
+    Args:
+        farm: Farm directory name, e.g. 'kelmarsh'.
+        pattern: Glob-style filename filter (only the basename is matched).
+                 Currently supports simple prefix/suffix matching via str.endswith.
+
+    Returns:
+        List of S3 URLs such as ['s3://windfarmdata/kelmarsh/data_turbine_1.parquet', ...]
+    """
+    client = _build_client()
+    prefix = f"{farm}/"
+    try:
+        paginator = client.get_paginator("list_objects_v2")
+        pages = paginator.paginate(Bucket=settings.r2_bucket_name, Prefix=prefix)
+
+        urls = []
+        for page in pages:
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                filename = key[len(prefix):]  # strip the farm/ prefix to get bare filename
+                if not filename or "/" in filename:
+                    # Skip directory placeholders or nested objects
+                    continue
+                if filename.endswith(".parquet"):
+                    url = f"s3://{settings.r2_bucket_name}/{key}"
+                    urls.append(url)
+
+        urls.sort()
+        logger.debug(
+            "list_farm_files: farm='%s' → %d parquet file(s) found", farm, len(urls)
         )
-        # Return the (possibly empty) local cache dir so the app stays alive.
-        # Endpoints will return empty results until credentials are fixed.
-        os.makedirs(local_farm_dir, exist_ok=True)
-    return local_farm_dir
+        return urls
+    except (BotoCoreError, ClientError) as exc:
+        logger.error("list_farm_files: R2 listing failed for farm='%s' — %s", farm, exc)
+        return []
 
 
 def list_remote_farms() -> list[str]:
@@ -90,60 +131,9 @@ def list_remote_farms() -> list[str]:
             p["Prefix"].rstrip("/")
             for p in resp.get("CommonPrefixes", [])
         ]
-        logger.debug("r2_service.list_remote_farms: found prefixes %s", prefixes)
+        logger.debug("list_remote_farms: found prefixes %s", prefixes)
         return prefixes
     except (BotoCoreError, ClientError) as exc:
-        logger.error("r2_service.list_remote_farms: R2 error — %s", exc)
+        logger.error("list_remote_farms: R2 error — %s", exc)
         return []
-
-
-def _sync_farm(farm: str, local_dir: str) -> None:
-    """Download all parquet files for *farm* from R2 into *local_dir*."""
-    os.makedirs(local_dir, exist_ok=True)
-    client = _build_client()
-    prefix = f"{farm}/"
-
-    paginator = client.get_paginator("list_objects_v2")
-    pages = paginator.paginate(Bucket=settings.r2_bucket_name, Prefix=prefix)
-
-    downloaded = 0
-    skipped = 0
-
-    for page in pages:
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            filename = os.path.basename(key)
-
-            # Only sync parquet files; skip 'directory' placeholder objects
-            if not filename.endswith(".parquet"):
-                continue
-
-            local_path = os.path.join(local_dir, filename)
-
-            # Skip if already cached (size match is a cheap freshness check)
-            if os.path.exists(local_path) and os.path.getsize(local_path) == obj["Size"]:
-                logger.debug("r2_service._sync_farm: skip (cached) '%s'", filename)
-                skipped += 1
-                continue
-
-            logger.info(
-                "r2_service._sync_farm: downloading '%s'  (%.1f KB)",
-                key, obj["Size"] / 1024,
-            )
-            try:
-                client.download_file(
-                    Bucket=settings.r2_bucket_name,
-                    Key=key,
-                    Filename=local_path,
-                )
-                downloaded += 1
-            except (BotoCoreError, ClientError) as exc:
-                logger.error(
-                    "r2_service._sync_farm: failed to download '%s' — %s", key, exc
-                )
-
-    logger.info(
-        "r2_service._sync_farm: farm='%s' downloaded=%d skipped=%d",
-        farm, downloaded, skipped,
-    )
 

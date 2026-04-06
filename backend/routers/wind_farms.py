@@ -4,7 +4,6 @@ Wind farms router — endpoints related to wind farm listing and metadata.
 
 import logging
 import os
-import glob
 import re
 from datetime import date
 from typing import Annotated
@@ -23,6 +22,9 @@ from backend.services.query_service import (
     get_time_range,
     get_columns_by_file_type,
     get_data_for_date,
+    count_turbines_in_files,
+    _list_farm_parquet_files,
+    _is_s3_path,
 )
 
 logger = logging.getLogger("windfarm.routers.wind_farms")
@@ -38,63 +40,36 @@ WIND_FARM_MAP: list[tuple[str, str]] = [
 
 
 def _resolve_farm_dir(dir_name: str) -> str:
-    """Return the local filesystem path for *dir_name*.
+    """Return the path or S3 prefix for *dir_name*.
 
-    In local mode:  data/<dir_name>
-    In r2 mode:     download from R2 into .r2_cache/<dir_name> and return that path
-
-    Never raises — on R2 errors returns a (possibly empty) local cache path so
-    the application remains healthy and endpoints degrade gracefully.
+    In local mode:  data/<dir_name>  (local filesystem path)
+    In r2 mode:     s3://<bucket>/<dir_name>/  (S3 prefix URL — no download)
     """
     if settings.storage_backend == "r2":
-        from backend.services.r2_service import get_farm_dir
-        try:
-            return get_farm_dir(dir_name)
-        except Exception as exc:  # noqa: BLE001
-            logger.error(
-                "_resolve_farm_dir: R2 error for farm='%s' — %s", dir_name, exc
-            )
-            # Fall through to an empty local path so callers see isdir() == False
-            # rather than an unhandled 500.
-            import os as _os
-            cache = _os.path.abspath(
-                _os.path.join(_os.path.dirname(__file__), "..", "..", ".r2_cache", dir_name)
-            )
-            return cache
+        from backend.services.r2_service import get_farm_prefix
+        return get_farm_prefix(dir_name)
     base = os.path.abspath(settings.parquet_base_path)
     return os.path.join(base, dir_name)
 
 
+def _farm_exists(farm_dir: str) -> bool:
+    """Check whether a farm directory / S3 prefix actually contains parquet files."""
+    if _is_s3_path(farm_dir):
+        # For R2, existence means there is at least one parquet file in the prefix
+        files = _list_farm_parquet_files(farm_dir)
+        return len(files) > 0
+    return os.path.isdir(farm_dir)
+
+
 def count_turbines(farm_dir: str) -> int:
-    """Count the number of unique turbines in a farm directory.
+    """Count the number of unique turbines in a farm directory or S3 prefix.
 
-    Supports two file naming conventions:
-      - Kelmarsh / Penmanshiel: data_turbine_1.parquet, status_turbine_1.parquet
-        → counts unique N in *_turbine_N.parquet
-      - Hill of Towie: T1_SomeSensor.parquet, T21_SCTurDigiOut.parquet
-        → counts unique N in T{N}_*.parquet
-
-    Returns the number of unique turbine indices found.
+    Delegates to count_turbines_in_files from query_service which handles
+    both local paths and S3 URLs transparently.
     """
     logger.debug("count_turbines: scanning '%s'", farm_dir)
-    parquet_files = glob.glob(os.path.join(farm_dir, "*.parquet"))
-    turbine_ids: set[str] = set()
-
-    for path in parquet_files:
-        filename = os.path.basename(path)
-
-        # Convention 1: data_turbine_3.parquet / status_turbine_3.parquet
-        m = re.match(r"^(?:data|status)_turbine_(\d+)\.parquet$", filename)
-        if m:
-            turbine_ids.add(m.group(1))
-            continue
-
-        # Convention 2: T21_SCTurDigiOut.parquet
-        m = re.match(r"^T(\d+)_", filename)
-        if m:
-            turbine_ids.add(m.group(1))
-
-    count = len(turbine_ids)
+    all_files = _list_farm_parquet_files(farm_dir)
+    count = count_turbines_in_files(all_files)
     logger.debug("count_turbines: found %d turbine(s) in '%s'", count, farm_dir)
     return count
 
@@ -117,7 +92,7 @@ def list_wind_farms() -> WindFarmsResponse:
     available: list[WindFarm] = []
     for display_name, dir_name in WIND_FARM_MAP:
         farm_path = _resolve_farm_dir(dir_name)
-        if os.path.isdir(farm_path):
+        if _farm_exists(farm_path):
             turbine_count = count_turbines(farm_path)
             logger.debug(
                 "list_wind_farms: farm='%s' dir='%s' turbines=%d",
@@ -158,7 +133,7 @@ def get_wind_farm_time_ranges() -> WindFarmTimeRangesResponse:
     results = []
     for _, dir_name in WIND_FARM_MAP:
         farm_dir = _resolve_farm_dir(dir_name)
-        if not os.path.isdir(farm_dir):
+        if not _farm_exists(farm_dir):
             logger.warning(
                 "get_wind_farm_time_ranges: skipping '%s' — directory not found",
                 dir_name,
@@ -217,7 +192,7 @@ def get_wind_farm_columns() -> FarmColumnsResponse:
     farms = []
     for dir_name in SCADA_FARMS:
         farm_dir = _resolve_farm_dir(dir_name)
-        if not os.path.isdir(farm_dir):
+        if not _farm_exists(farm_dir):
             logger.warning(
                 "get_wind_farm_columns: skipping '%s' — directory not found",
                 dir_name,
@@ -322,7 +297,7 @@ def get_day_data(
         )
 
     farm_dir = _resolve_farm_dir(farm)
-    if not os.path.isdir(farm_dir):
+    if not _farm_exists(farm_dir):
         logger.error(
             "get_day_data: farm='%s' — directory missing at '%s'",
             farm, farm_dir,
