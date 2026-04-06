@@ -277,3 +277,7 @@
 
 > ok, now upload files from kelmarsh directory to r2 cloudflare bucket that has url: https://7cf52f0e0957036ef8b28411ed958be4.r2.cloudflarestorage.com/windfarmdata a directory called kelmarsh is already created
 
+## Entry 69 - 2026-04-06
+
+> ok cool, let's remove hill of towie from frontend for now and connect to the r2 instead of local data directory path
+
