@@ -337,6 +337,7 @@ const PREFERRED_COLUMNS = [
   'nacelle position',
   'power',
   'rotor speed',
+  'generator rpm',
 ]
 
 watch(
