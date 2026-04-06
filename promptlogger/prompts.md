@@ -301,3 +301,7 @@
 
 > ok, .env file is set up, now, run the docker with those credentials
 
+## Entry 75 - 2026-04-06
+
+> ok so the main problem with docker is that parquet files on r2 storage are being downloaded and not accessed directly. fix that
+
