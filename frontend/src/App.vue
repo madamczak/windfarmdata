@@ -97,8 +97,10 @@
         </div>
       </section>
 
-      <!-- ── Results table ──────────────────────────────────────────── -->
+      <!-- ── Results (tabbed) ───────────────────────────────────────── -->
       <section v-if="result" class="results card">
+
+        <!-- Section title + meta -->
         <div class="results-header">
           <h2>{{ result.farm }} / {{ result.file_type }} / {{ result.date }}</h2>
           <span class="row-count">
@@ -108,94 +110,123 @@
             </template>
             rows
           </span>
-          <input
-            class="global-filter"
-            type="search"
-            v-model="globalFilter"
-            placeholder="🔍 Search all columns…"
-          />
-          <button class="btn-clear" @click="clearFilters" title="Clear all filters &amp; sort">
-            ✕ Clear filters
-          </button>
-          <div class="download-group">
-            <select v-model="downloadFormat" class="download-format-select">
-              <option value="csv">CSV</option>
-              <option value="json">JSON</option>
-            </select>
-            <button class="btn-download" @click="downloadFile">
-              ⬇ Download
-            </button>
-          </div>
         </div>
 
-        <!-- ── Data quality report ──────────────────────────────────── -->
-        <div class="report">
-          <div class="report-title">
+        <!-- Tab bar -->
+        <div class="tab-bar">
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'report' }"
+            @click="activeTab = 'report'"
+          >
             📊 Data Quality Report
-            <span class="report-subtitle">{{ result.row_count }} rows · {{ result.columns.length }} columns · "good" = non-null &amp; non-zero</span>
-          </div>
-          <div class="report-grid">
-            <div
-              v-for="stat in columnStats"
-              :key="stat.col"
-              class="stat-card"
-              :class="stat.goodRate < 50 ? 'stat-bad' : stat.goodRate < 90 ? 'stat-warn' : 'stat-ok'"
-            >
-              <div class="stat-col-name" :title="stat.col">{{ stat.col }}</div>
-              <div class="stat-bar-wrap">
-                <div class="stat-bar" :style="{ width: stat.goodRate + '%' }"></div>
-              </div>
-              <div class="stat-numbers">
-                <span class="stat-fill">{{ stat.goodRate }}% good</span>
-                <span v-if="stat.nullCount" class="stat-null">{{ stat.nullCount }} null</span>
-                <span v-if="stat.zeroCount" class="stat-zero">{{ stat.zeroCount }} zero</span>
+          </button>
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'table' }"
+            @click="activeTab = 'table'"
+          >
+            📋 Data Table
+          </button>
+        </div>
+
+        <!-- ── Tab: Data Quality Report ───────────────────────────── -->
+        <div v-show="activeTab === 'report'" class="tab-panel">
+          <div class="report">
+            <div class="report-title">
+              📊 Data Quality Report
+              <span class="report-subtitle">
+                {{ result.row_count }} rows · {{ result.columns.length }} columns ·
+                "good" = non-null &amp; non-zero
+              </span>
+            </div>
+            <div class="report-grid">
+              <div
+                v-for="stat in columnStats"
+                :key="stat.col"
+                class="stat-card"
+                :class="stat.goodRate < 50 ? 'stat-bad' : stat.goodRate < 90 ? 'stat-warn' : 'stat-ok'"
+              >
+                <div class="stat-col-name" :title="stat.col">{{ stat.col }}</div>
+                <div class="stat-bar-wrap">
+                  <div class="stat-bar" :style="{ width: stat.goodRate + '%' }"></div>
+                </div>
+                <div class="stat-numbers">
+                  <span class="stat-fill">{{ stat.goodRate }}% good</span>
+                  <span v-if="stat.nullCount" class="stat-null">{{ stat.nullCount }} null</span>
+                  <span v-if="stat.zeroCount" class="stat-zero">{{ stat.zeroCount }} zero</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="table-scroll">
-          <table>
-            <thead>
-              <!-- Row 1: column headers with sort arrows -->
-              <tr>
-                <th
-                  v-for="(col, ci) in result.columns"
-                  :key="col"
-                  class="sortable"
-                  @click="setSort(ci)"
-                >
-                  <span class="th-label">{{ col }}</span>
-                  <span class="sort-icon">
-                    <template v-if="sortCol === ci">
-                      {{ sortDir === 1 ? '▲' : '▼' }}
-                    </template>
-                    <template v-else>⇅</template>
-                  </span>
-                </th>
-              </tr>
-              <!-- Row 2: per-column filter inputs -->
-              <tr class="filter-row">
-                <th v-for="(col, ci) in result.columns" :key="'f' + ci">
-                  <input
-                    class="col-filter"
-                    type="text"
-                    :placeholder="'filter…'"
-                    v-model="colFilters[ci]"
-                  />
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(row, i) in filteredRows" :key="i">
-                <td v-for="(cell, j) in row" :key="j">{{ cell ?? '—' }}</td>
-              </tr>
-              <tr v-if="filteredRows.length === 0">
-                <td :colspan="result.columns.length" class="no-rows">No rows match the current filters.</td>
-              </tr>
-            </tbody>
-          </table>
+        <!-- ── Tab: Data Table ────────────────────────────────────── -->
+        <div v-show="activeTab === 'table'" class="tab-panel">
+          <!-- Table toolbar -->
+          <div class="table-toolbar">
+            <input
+              class="global-filter"
+              type="search"
+              v-model="globalFilter"
+              placeholder="🔍 Search all columns…"
+            />
+            <button class="btn-clear" @click="clearFilters" title="Clear all filters &amp; sort">
+              ✕ Clear filters
+            </button>
+            <div class="download-group">
+              <select v-model="downloadFormat" class="download-format-select">
+                <option value="csv">CSV</option>
+                <option value="json">JSON</option>
+              </select>
+              <button class="btn-download" @click="downloadFile">
+                ⬇ Download
+              </button>
+            </div>
+          </div>
+
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th
+                    v-for="(col, ci) in result.columns"
+                    :key="col"
+                    class="sortable"
+                    @click="setSort(ci)"
+                  >
+                    <span class="th-label">{{ col }}</span>
+                    <span class="sort-icon">
+                      <template v-if="sortCol === ci">
+                        {{ sortDir === 1 ? '▲' : '▼' }}
+                      </template>
+                      <template v-else>⇅</template>
+                    </span>
+                  </th>
+                </tr>
+                <tr class="filter-row">
+                  <th v-for="(_col, ci) in result.columns" :key="'f' + ci">
+                    <input
+                      class="col-filter"
+                      type="text"
+                      placeholder="filter…"
+                      v-model="colFilters[ci]"
+                    />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, i) in filteredRows" :key="i">
+                  <td v-for="(cell, j) in row" :key="j">{{ cell ?? '—' }}</td>
+                </tr>
+                <tr v-if="filteredRows.length === 0">
+                  <td :colspan="result.columns.length" class="no-rows">No rows match the current filters.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
+
       </section>
     </main>
   </div>
@@ -701,6 +732,45 @@ input[type="date"]:disabled {
 .stat-fill { color: #555; font-weight: 600; }
 .stat-null { color: #e53e3e; }
 .stat-zero { color: #d69e2e; }
+
+/* ── Tabs ─────────────────────────────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid #e4e7ec;
+  margin-bottom: 16px;
+}
+
+.tab-btn {
+  padding: 10px 22px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #888;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+  white-space: nowrap;
+}
+.tab-btn:hover { color: #4361ee; }
+.tab-btn.active {
+  color: #4361ee;
+  border-bottom-color: #4361ee;
+}
+
+.tab-panel { animation: fadeIn .15s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ── Table toolbar ───────────────────────────────────────────────────── */
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
 
 /* ── Results ──────────────────────────────────────────────────────────── */
 .results { display: flex; flex-direction: column; gap: 14px; }
