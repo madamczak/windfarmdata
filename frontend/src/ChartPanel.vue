@@ -325,12 +325,39 @@ function buildChartOptions(col) {
   }
 }
 
-// ── Auto-select first few numeric columns when result changes ──────────────
+// ── Auto-select preferred columns when result changes ─────────────────────
+
+/**
+ * Preferred column names to pre-select on load (case-insensitive substring match).
+ * Order determines priority — the first match per entry wins.
+ */
+const PREFERRED_COLUMNS = [
+  'wind speed',
+  'wind direction',
+  'nacelle position',
+  'power',
+  'rotor speed',
+]
+
 watch(
   () => props.result,
   () => {
-    // Pre-select up to 3 numeric columns so something is visible immediately
-    selectedCols.value = numericColumns.value.slice(0, 3)
+    const available = numericColumns.value
+
+    // Try to match each preferred name against available numeric columns
+    const matched = []
+    for (const pref of PREFERRED_COLUMNS) {
+      const found = available.find(
+        col => col.toLowerCase().includes(pref.toLowerCase())
+      )
+      // Only add if found and not already picked
+      if (found && !matched.includes(found)) {
+        matched.push(found)
+      }
+    }
+
+    // If nothing matched fall back to first 5 numeric columns
+    selectedCols.value = matched.length > 0 ? matched : available.slice(0, 5)
   },
   { immediate: true },
 )
