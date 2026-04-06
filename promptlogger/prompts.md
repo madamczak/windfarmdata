@@ -240,3 +240,8 @@
 ## Entry 52 - 2026-04-05 12:30
 
 > ok, so now every push is made to the repo, tests are being executed, let's test that - add 1 empty line to whatever file and commit and push it
+
+## Entry 60 - 2026-04-06
+
+> so now make Data Quality Report and table with data to be selectable on separate tabs
+
