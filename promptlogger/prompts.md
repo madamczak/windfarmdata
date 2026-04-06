@@ -245,3 +245,7 @@
 
 > so now make Data Quality Report and table with data to be selectable on separate tabs
 
+## Entry 61 - 2026-04-06
+
+> ok, now I want another tab with charts of those data. Use charts js library
+
