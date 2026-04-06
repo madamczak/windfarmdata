@@ -131,7 +131,7 @@
         </div>
 
         <!-- ── Tab: Data Quality Report ───────────────────────────── -->
-        <div v-show="activeTab === 'report'" class="tab-panel">
+        <div :class="['tab-panel', activeTab !== 'report' && 'tab-panel--hidden']">
           <div class="report">
             <div class="report-title">
               📊 Data Quality Report
@@ -162,7 +162,7 @@
         </div>
 
         <!-- ── Tab: Data Table ────────────────────────────────────── -->
-        <div v-show="activeTab === 'table'" class="tab-panel">
+        <div :class="['tab-panel', activeTab !== 'table' && 'tab-panel--hidden']">
           <!-- Table toolbar -->
           <div class="table-toolbar">
             <input
@@ -317,6 +317,9 @@ const canFetch = computed(() =>
  */
 const filteredRows = computed(() => {
   if (!result.value) return []
+
+  // Skip the expensive filter/sort pass when the table tab isn't visible
+  if (activeTab.value !== 'table') return result.value.rows
 
   const global = globalFilter.value.trim().toLowerCase()
   const perCol = colFilters.value.map(f => (f ?? '').trim().toLowerCase())
@@ -764,8 +767,21 @@ input[type="date"]:disabled {
   border-bottom-color: #4361ee;
 }
 
-.tab-panel { animation: fadeIn .15s ease; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.tab-panel {
+  /* Isolate each panel's layout and paint so toggling display is cheap */
+  contain: layout style;
+  will-change: contents;
+}
+.tab-panel--hidden {
+  /* Remove from layout & paint without destroying the DOM node */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  pointer-events: none;
+}
 
 /* ── Table toolbar ───────────────────────────────────────────────────── */
 .table-toolbar {
