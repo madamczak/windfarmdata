@@ -281,3 +281,7 @@
 
 > ok cool, let's remove hill of towie from frontend for now and connect to the r2 instead of local data directory path
 
+## Entry 70 - 2026-04-06
+
+> ok, I removed kelmarsh and penmanshiel from data directory and now when I run docker compose up --build it does not load anything. Fix it
+
