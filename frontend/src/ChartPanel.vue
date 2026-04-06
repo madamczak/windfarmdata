@@ -45,17 +45,45 @@
         </div>
       </div>
 
-      <!-- Max points (performance guard) -->
+      <!-- Page size -->
       <div class="chart-control-group">
-        <label class="chart-label">Max points</label>
-        <select v-model="maxPoints" class="chart-select">
+        <label class="chart-label">Rows per page</label>
+        <select v-model="pageSize" class="chart-select" @change="currentPage = 0">
+          <option :value="25">25</option>
+          <option :value="50">50</option>
+          <option :value="100">100</option>
+          <option :value="200">200</option>
           <option :value="500">500</option>
-          <option :value="1000">1 000</option>
-          <option :value="2000">2 000</option>
-          <option :value="5000">5 000</option>
-          <option :value="Infinity">All</option>
         </select>
       </div>
+    </div>
+
+    <!-- ── Pagination bar ────────────────────────────────────────────── -->
+    <div class="pagination-bar">
+      <button class="page-btn" :disabled="currentPage === 0" @click="currentPage = 0" title="First page">«</button>
+      <button class="page-btn" :disabled="currentPage === 0" @click="currentPage--" title="Previous page">‹</button>
+
+      <span class="page-info">
+        Rows&nbsp;
+        <strong>{{ pageStart + 1 }}–{{ pageEnd }}</strong>
+        &nbsp;of&nbsp;
+        <strong>{{ totalRows }}</strong>
+        &nbsp;(page&nbsp;{{ currentPage + 1 }}&nbsp;/&nbsp;{{ totalPages }})
+      </span>
+
+      <!-- Jump-to-page input -->
+      <input
+        class="page-jump"
+        type="number"
+        min="1"
+        :max="totalPages"
+        :value="currentPage + 1"
+        @change="jumpToPage($event.target.value)"
+        title="Jump to page"
+      />
+
+      <button class="page-btn" :disabled="currentPage >= totalPages - 1" @click="currentPage++" title="Next page">›</button>
+      <button class="page-btn" :disabled="currentPage >= totalPages - 1" @click="currentPage = totalPages - 1" title="Last page">»</button>
     </div>
 
     <!-- ── No columns selected hint ─────────────────────────────────── -->
@@ -129,12 +157,30 @@ const props = defineProps({
 // ── Local state ────────────────────────────────────────────────────────────
 const selectedCols = ref([])
 const chartType    = ref('line')
-const maxPoints    = ref(1000)
+const pageSize     = ref(50)
+const currentPage  = ref(0)
 
 const chartTypes = [
   { value: 'line', label: '📈 Line' },
   { value: 'bar',  label: '📊 Bar'  },
 ]
+
+// ── Pagination ─────────────────────────────────────────────────────────────
+const totalRows  = computed(() => props.result.rows.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalRows.value / pageSize.value)))
+const pageStart  = computed(() => currentPage.value * pageSize.value)
+const pageEnd    = computed(() => Math.min(pageStart.value + pageSize.value, totalRows.value))
+
+/** The current page's slice of rows — the only rows sent to charts */
+const pageRows = computed(() => props.result.rows.slice(pageStart.value, pageEnd.value))
+
+function jumpToPage(val) {
+  const n = parseInt(val, 10)
+  if (!isNaN(n)) currentPage.value = Math.max(0, Math.min(totalPages.value - 1, n - 1))
+}
+
+// Reset to page 0 when result changes
+watch(() => props.result, () => { currentPage.value = 0 })
 
 // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -165,18 +211,10 @@ const numericColumns = computed(() => {
   })
 })
 
-/** Downsampled rows to keep rendering fast */
-const sampledRows = computed(() => {
-  const rows = props.result.rows
-  if (rows.length <= maxPoints.value) return rows
-  const step = Math.ceil(rows.length / maxPoints.value)
-  return rows.filter((_, i) => i % step === 0)
-})
-
-/** X-axis labels from the timestamp column */
+/** X-axis labels from the current page's timestamp column */
 const labels = computed(() => {
   const tIdx = timeColIdx.value
-  return sampledRows.value.map(row => {
+  return pageRows.value.map(row => {
     const raw = row[tIdx]
     if (!raw) return ''
     // Trim to HH:MM:SS for readability (date is in the page title already)
@@ -224,10 +262,9 @@ const PALETTE = [
 
 function buildChartData(col) {
   const ci = props.result.columns.indexOf(col)
-  const colourIdx = selectedCols.value.indexOf(col)
-  const colour = PALETTE[colourIdx % PALETTE.length]
+  const colour = PALETTE[selectedCols.value.indexOf(col) % PALETTE.length]
 
-  const data = sampledRows.value.map(row => {
+  const data = pageRows.value.map(row => {
     const v = row[ci]
     if (v === null || v === undefined || v === '') return null
     const n = Number(v)
@@ -383,7 +420,7 @@ watch(
   border-color: #4361ee;
 }
 
-/* Max points select */
+/* Page size select */
 .chart-select {
   padding: 6px 10px;
   border: 1px solid #d0d5dd;
@@ -433,5 +470,52 @@ watch(
   height: 220px;
   position: relative;
 }
+
+/* ── Pagination bar ───────────────────────────────────────────────────── */
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: #fafbfc;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.page-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  color: #4361ee;
+  font-weight: 700;
+  transition: background .12s;
+  line-height: 1;
+}
+.page-btn:hover:not(:disabled) { background: #eef1fd; }
+.page-btn:disabled { color: #ccc; cursor: not-allowed; }
+
+.page-info { color: #555; white-space: nowrap; }
+
+.page-jump {
+  width: 58px;
+  padding: 5px 8px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: center;
+}
+.page-jump:focus { outline: 2px solid #4361ee; border-color: transparent; }
+
+/* hide number spinner arrows */
+.page-jump::-webkit-inner-spin-button,
+.page-jump::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.page-jump { -moz-appearance: textfield; }
 </style>
 
