@@ -273,3 +273,7 @@
 
 > ok add also Generator RPM (RPM) to default charts
 
+## Entry 68 - 2026-04-06
+
+> ok, now upload files from kelmarsh directory to r2 cloudflare bucket that has url: https://7cf52f0e0957036ef8b28411ed958be4.r2.cloudflarestorage.com/windfarmdata a directory called kelmarsh is already created
+
