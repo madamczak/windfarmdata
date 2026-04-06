@@ -110,13 +110,6 @@
         <div class="tab-bar">
           <button
             class="tab-btn"
-            :class="{ active: activeTab === 'report' }"
-            @click="activeTab = 'report'"
-          >
-            📊 Data Quality Report
-          </button>
-          <button
-            class="tab-btn"
             :class="{ active: activeTab === 'table' }"
             @click="activeTab = 'table'"
           >
@@ -129,37 +122,13 @@
           >
             📈 Charts
           </button>
-        </div>
-
-        <!-- ── Tab: Data Quality Report ───────────────────────────── -->
-        <div :class="['tab-panel', activeTab !== 'report' && 'tab-panel--hidden']">
-          <div class="report">
-            <div class="report-title">
-              📊 Data Quality Report
-              <span class="report-subtitle">
-                {{ result.row_count }} rows · {{ result.columns.length }} columns ·
-                "good" = non-null &amp; non-zero
-              </span>
-            </div>
-            <div class="report-grid">
-              <div
-                v-for="stat in columnStats"
-                :key="stat.col"
-                class="stat-card"
-                :class="stat.goodRate < 50 ? 'stat-bad' : stat.goodRate < 90 ? 'stat-warn' : 'stat-ok'"
-              >
-                <div class="stat-col-name" :title="stat.col">{{ stat.col }}</div>
-                <div class="stat-bar-wrap">
-                  <div class="stat-bar" :style="{ width: stat.goodRate + '%' }"></div>
-                </div>
-                <div class="stat-numbers">
-                  <span class="stat-fill">{{ stat.goodRate }}% good</span>
-                  <span v-if="stat.nullCount" class="stat-null">{{ stat.nullCount }} null</span>
-                  <span v-if="stat.zeroCount" class="stat-zero">{{ stat.zeroCount }} zero</span>
-                </div>
-              </div>
-            </div>
-          </div>
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'report' }"
+            @click="activeTab = 'report'"
+          >
+            📊 Data Quality Report
+          </button>
         </div>
 
         <!-- ── Tab: Data Table ────────────────────────────────────── -->
@@ -269,6 +238,37 @@
           <ChartPanel :result="result" />
         </div>
 
+        <!-- ── Tab: Data Quality Report ───────────────────────────── -->
+        <div :class="['tab-panel', activeTab !== 'report' && 'tab-panel--hidden']">
+          <div class="report">
+            <div class="report-title">
+              📊 Data Quality Report
+              <span class="report-subtitle">
+                {{ result.row_count }} rows · {{ result.columns.length }} columns ·
+                "good" = non-null &amp; non-zero
+              </span>
+            </div>
+            <div class="report-grid">
+              <div
+                v-for="stat in columnStats"
+                :key="stat.col"
+                class="stat-card"
+                :class="stat.goodRate < 50 ? 'stat-bad' : stat.goodRate < 90 ? 'stat-warn' : 'stat-ok'"
+              >
+                <div class="stat-col-name" :title="stat.col">{{ stat.col }}</div>
+                <div class="stat-bar-wrap">
+                  <div class="stat-bar" :style="{ width: stat.goodRate + '%' }"></div>
+                </div>
+                <div class="stat-numbers">
+                  <span class="stat-fill">{{ stat.goodRate }}% good</span>
+                  <span v-if="stat.nullCount" class="stat-null">{{ stat.nullCount }} null</span>
+                  <span v-if="stat.zeroCount" class="stat-zero">{{ stat.zeroCount }} zero</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </section>
     </main>
   </div>
@@ -304,8 +304,8 @@ const loading = ref(false)
 const error   = ref('')
 const result  = ref(null)
 
-/** Which results tab is active: 'report' | 'table' */
-const activeTab = ref('report')
+/** Which results tab is active: 'table' | 'charts' | 'report' */
+const activeTab = ref('table')
 
 // ── Sort & filter state ────────────────────────────────────────────────────
 const globalFilter   = ref('')   // global search string
@@ -565,7 +565,7 @@ async function fetchData() {
     sortCol.value      = null
     sortDir.value      = 1
     tablePage.value    = 0
-    activeTab.value    = 'report'
+    activeTab.value    = 'table'
   } catch (e) {
     error.value = e.message
   } finally {
