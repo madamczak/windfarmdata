@@ -42,10 +42,25 @@ def _resolve_farm_dir(dir_name: str) -> str:
 
     In local mode:  data/<dir_name>
     In r2 mode:     download from R2 into .r2_cache/<dir_name> and return that path
+
+    Never raises — on R2 errors returns a (possibly empty) local cache path so
+    the application remains healthy and endpoints degrade gracefully.
     """
     if settings.storage_backend == "r2":
         from backend.services.r2_service import get_farm_dir
-        return get_farm_dir(dir_name)
+        try:
+            return get_farm_dir(dir_name)
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "_resolve_farm_dir: R2 error for farm='%s' — %s", dir_name, exc
+            )
+            # Fall through to an empty local path so callers see isdir() == False
+            # rather than an unhandled 500.
+            import os as _os
+            cache = _os.path.abspath(
+                _os.path.join(_os.path.dirname(__file__), "..", "..", ".r2_cache", dir_name)
+            )
+            return cache
     base = os.path.abspath(settings.parquet_base_path)
     return os.path.join(base, dir_name)
 

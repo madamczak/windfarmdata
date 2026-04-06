@@ -52,9 +52,29 @@ def get_farm_dir(farm: str) -> str:
         logger.debug("r2_service.get_farm_dir: cache hit for farm='%s'", farm)
         return local_farm_dir
 
+    # Guard: if credentials are not configured, skip the sync and warn clearly
+    if not settings.r2_access_key_id or not settings.r2_secret_access_key:
+        logger.error(
+            "r2_service.get_farm_dir: R2 credentials not set "
+            "(R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY are empty). "
+            "Create a .env file from .env.example and set your credentials."
+        )
+        os.makedirs(local_farm_dir, exist_ok=True)
+        return local_farm_dir
+
     logger.info("r2_service.get_farm_dir: syncing farm='%s' from R2", farm)
-    _sync_farm(farm, local_farm_dir)
-    _synced.add(farm)
+    try:
+        _sync_farm(farm, local_farm_dir)
+        _synced.add(farm)
+    except (BotoCoreError, ClientError) as exc:
+        logger.error(
+            "r2_service.get_farm_dir: R2 sync failed for farm='%s' — %s. "
+            "Check R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY in your .env file.",
+            farm, exc,
+        )
+        # Return the (possibly empty) local cache dir so the app stays alive.
+        # Endpoints will return empty results until credentials are fixed.
+        os.makedirs(local_farm_dir, exist_ok=True)
     return local_farm_dir
 
 
