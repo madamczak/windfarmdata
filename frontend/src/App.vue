@@ -128,6 +128,13 @@
           >
             📋 Data Table
           </button>
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'charts' }"
+            @click="activeTab = 'charts'"
+          >
+            📈 Charts
+          </button>
         </div>
 
         <!-- ── Tab: Data Quality Report ───────────────────────────── -->
@@ -227,6 +234,11 @@
           </div>
         </div>
 
+        <!-- ── Tab: Charts ────────────────────────────────────────── -->
+        <div :class="['tab-panel', activeTab !== 'charts' && 'tab-panel--hidden']">
+          <ChartPanel :result="result" />
+        </div>
+
       </section>
     </main>
   </div>
@@ -239,6 +251,7 @@
  */
 import { ref, computed, onMounted } from 'vue'
 import { fetchWindFarms, fetchColumns, fetchDayData, fetchTimeRanges } from './api.js'
+import ChartPanel from './ChartPanel.vue'
 
 // ── State ──────────────────────────────────────────────────────────────────
 
