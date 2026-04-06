@@ -74,8 +74,8 @@
         <div class="chart-wrap">
           <component
             :is="chartComponent"
-            :data="buildChartData(col)"
-            :options="chartOptions(col)"
+            :data="chartDataMap[col]"
+            :options="chartOptionsMap[col]"
           />
         </div>
       </div>
@@ -190,6 +190,30 @@ const labels = computed(() => {
 /** The Chart.js component to render (Line or Bar) */
 const chartComponent = computed(() => chartType.value === 'bar' ? Bar : Line)
 
+/**
+ * Memoised map of col → Chart.js data object.
+ * Recomputes only when selectedCols, sampledRows, chartType or labels change.
+ */
+const chartDataMap = computed(() => {
+  const map = {}
+  for (const col of selectedCols.value) {
+    map[col] = buildChartData(col)
+  }
+  return map
+})
+
+/**
+ * Memoised map of col → Chart.js options object.
+ * Recomputes only when selectedCols or chartType change.
+ */
+const chartOptionsMap = computed(() => {
+  const map = {}
+  for (const col of selectedCols.value) {
+    map[col] = buildChartOptions(col)
+  }
+  return map
+})
+
 // ── Chart builders ─────────────────────────────────────────────────────────
 
 // Palette of distinct colours for multiple series
@@ -228,7 +252,7 @@ function buildChartData(col) {
   }
 }
 
-function chartOptions(col) {
+function buildChartOptions(col) {
   return {
     responsive: true,
     maintainAspectRatio: false,

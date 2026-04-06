@@ -235,7 +235,7 @@
         </div>
 
         <!-- ── Tab: Charts ────────────────────────────────────────── -->
-        <div :class="['tab-panel', activeTab !== 'charts' && 'tab-panel--hidden']">
+        <div v-if="activeTab === 'charts'" class="tab-panel">
           <ChartPanel :result="result" />
         </div>
 
