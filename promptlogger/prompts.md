@@ -257,3 +257,7 @@
 
 > ok, cool, it's added to charts tab but add it also to data table part
 
+## Entry 64 - 2026-04-06
+
+> ok switch the order of the tabs - data table should be first, then charts and quality report at the end
+
