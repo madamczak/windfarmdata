@@ -297,3 +297,7 @@
 
 > just create .env and set the placeholders there
 
+## Entry 74 - 2026-04-06
+
+> ok, .env file is set up, now, run the docker with those credentials
+
