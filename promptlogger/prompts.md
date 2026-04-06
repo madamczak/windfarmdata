@@ -265,3 +265,7 @@
 
 > ok, there is some new code, add tests for it and push everything to github
 
+## Entry 66 - 2026-04-06
+
+> ok so on the charts tab the default displayed charts should be: Wind speed (m/s), Wind direction (°), Nacelle position (°), Power (kW) and Rotor speed, Standard deviation (RPM)
+
