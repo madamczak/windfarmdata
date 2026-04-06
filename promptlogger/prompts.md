@@ -293,3 +293,7 @@
 
 > again - r2 env variables are declared as $env:R2_SECRET_ACCESS_KEY = "...", $env:R2_ACCESS_KEY_ID = "..."  and $env:STORAGE_BACKEND = "https://7cf52f0e0957036ef8b28411ed958be4.r2.cloudflarestorage.com/windfarmdata" now, check if docker would start and load data using those variables
 
+## Entry 73 - 2026-04-06
+
+> just create .env and set the placeholders there
+
