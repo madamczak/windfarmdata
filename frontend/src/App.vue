@@ -103,13 +103,7 @@
         <!-- Section title + meta -->
         <div class="results-header">
           <h2>{{ result.farm }} / {{ result.file_type }} / {{ result.date }}</h2>
-          <span class="row-count">
-            {{ filteredRows.length.toLocaleString() }}
-            <template v-if="filteredRows.length !== result.row_count">
-              / {{ result.row_count.toLocaleString() }}
-            </template>
-            rows
-          </span>
+          <span class="row-count">{{ result.row_count.toLocaleString() }} rows</span>
         </div>
 
         <!-- Tab bar -->
@@ -181,6 +175,17 @@
             <button class="btn-clear" @click="clearFilters" title="Clear all filters &amp; sort">
               ✕ Clear filters
             </button>
+            <!-- Rows per page -->
+            <label class="page-size-label">
+              Rows/page
+              <select v-model="tablePageSize" class="page-size-select">
+                <option :value="25">25</option>
+                <option :value="50">50</option>
+                <option :value="100">100</option>
+                <option :value="200">200</option>
+                <option :value="500">500</option>
+              </select>
+            </label>
             <div class="download-group">
               <select v-model="downloadFormat" class="download-format-select">
                 <option value="csv">CSV</option>
@@ -190,6 +195,31 @@
                 ⬇ Download
               </button>
             </div>
+          </div>
+
+          <!-- Pagination bar -->
+          <div class="pagination-bar">
+            <button class="page-btn" :disabled="tablePage === 0" @click="tablePage = 0" title="First page">«</button>
+            <button class="page-btn" :disabled="tablePage === 0" @click="tablePage--" title="Previous page">‹</button>
+            <span class="page-info">
+              Rows&nbsp;<strong>{{ tablePageStart + 1 }}–{{ tablePageEnd }}</strong>
+              &nbsp;of&nbsp;<strong>{{ filteredRows.length.toLocaleString() }}</strong>
+              <template v-if="filteredRows.length !== result.row_count">
+                &nbsp;({{ result.row_count.toLocaleString() }} total)
+              </template>
+              &nbsp;· page&nbsp;{{ tablePage + 1 }}&nbsp;/&nbsp;{{ tableTotalPages }}
+            </span>
+            <input
+              class="page-jump"
+              type="number"
+              min="1"
+              :max="tableTotalPages"
+              :value="tablePage + 1"
+              @change="jumpTablePage($event.target.value)"
+              title="Jump to page"
+            />
+            <button class="page-btn" :disabled="tablePage >= tableTotalPages - 1" @click="tablePage++" title="Next page">›</button>
+            <button class="page-btn" :disabled="tablePage >= tableTotalPages - 1" @click="tablePage = tableTotalPages - 1" title="Last page">»</button>
           </div>
 
           <div class="table-scroll">
@@ -223,10 +253,10 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(row, i) in filteredRows" :key="i">
+                <tr v-for="(row, i) in pagedRows" :key="i">
                   <td v-for="(cell, j) in row" :key="j">{{ cell ?? '—' }}</td>
                 </tr>
-                <tr v-if="filteredRows.length === 0">
+                <tr v-if="pagedRows.length === 0">
                   <td :colspan="result.columns.length" class="no-rows">No rows match the current filters.</td>
                 </tr>
               </tbody>
@@ -249,7 +279,7 @@
  * App.vue — main (and only) view for the Wind Farm Data Explorer.
  * Uses Vue 3 Composition API with <script setup>.
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { fetchWindFarms, fetchColumns, fetchDayData, fetchTimeRanges } from './api.js'
 import ChartPanel from './ChartPanel.vue'
 
@@ -283,6 +313,10 @@ const colFilters     = ref([])   // per-column filter strings (indexed by column
 const sortCol        = ref(null) // column index being sorted, or null
 const sortDir        = ref(1)    // 1 = ascending, -1 = descending
 const downloadFormat = ref('csv') // 'csv' | 'json'
+
+// ── Table pagination state ─────────────────────────────────────────────────
+const tablePage     = ref(0)   // 0-based current page index
+const tablePageSize = ref(50)  // rows per page
 
 // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -371,6 +405,24 @@ const filteredRows = computed(() => {
   return rows
 })
 
+// ── Table pagination derived ───────────────────────────────────────────────
+const tableTotalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredRows.value.length / tablePageSize.value))
+)
+const tablePageStart = computed(() => tablePage.value * tablePageSize.value)
+const tablePageEnd   = computed(() =>
+  Math.min(tablePageStart.value + tablePageSize.value, filteredRows.value.length)
+)
+/** The slice of filtered+sorted rows that is actually rendered in the table */
+const pagedRows = computed(() =>
+  filteredRows.value.slice(tablePageStart.value, tablePageEnd.value)
+)
+
+function jumpTablePage(val) {
+  const n = parseInt(val, 10)
+  if (!isNaN(n)) tablePage.value = Math.max(0, Math.min(tableTotalPages.value - 1, n - 1))
+}
+
 /**
  * Per-column data quality stats computed from the raw (unfiltered) result rows.
  * Nulls AND zeros are both treated as problematic values.
@@ -445,6 +497,7 @@ function clearFilters() {
   colFilters.value   = result.value ? Array(result.value.columns.length).fill('') : []
   sortCol.value      = null
   sortDir.value      = 1
+  tablePage.value    = 0
 }
 
 /**
@@ -506,11 +559,12 @@ async function fetchData() {
       selectedFileType.value,
       cols
     )
-    // Reset sort, filters and active tab for the new dataset
+    // Reset sort, filters, pagination and active tab for the new dataset
     globalFilter.value = ''
     colFilters.value   = Array(result.value.columns.length).fill('')
     sortCol.value      = null
     sortDir.value      = 1
+    tablePage.value    = 0
     activeTab.value    = 'report'
   } catch (e) {
     error.value = e.message
@@ -518,6 +572,11 @@ async function fetchData() {
     loading.value = false
   }
 }
+
+// Reset table to page 1 whenever the filter or sort changes
+watch([globalFilter, colFilters, sortCol, sortDir, tablePageSize], () => {
+  tablePage.value = 0
+})
 
 // ── Initialisation ─────────────────────────────────────────────────────────
 
@@ -796,14 +855,6 @@ input[type="date"]:disabled {
   pointer-events: none;
 }
 
-/* ── Table toolbar ───────────────────────────────────────────────────── */
-.table-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
 
 /* ── Results ──────────────────────────────────────────────────────────── */
 .results { display: flex; flex-direction: column; gap: 14px; }
@@ -884,6 +935,80 @@ input[type="date"]:disabled {
   height: 34px;
 }
 .btn-download:hover { background: #3451d1; }
+
+/* ── Table toolbar ───────────────────────────────────────────────────── */
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.page-size-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  white-space: nowrap;
+}
+
+.page-size-select {
+  padding: 6px 8px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* ── Pagination bar ───────────────────────────────────────────────────── */
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: #fafbfc;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.page-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  color: #4361ee;
+  font-weight: 700;
+  transition: background .12s;
+  line-height: 1;
+}
+.page-btn:hover:not(:disabled) { background: #eef1fd; }
+.page-btn:disabled { color: #ccc; cursor: not-allowed; }
+
+.page-info { color: #555; white-space: nowrap; }
+
+.page-jump {
+  width: 58px;
+  padding: 5px 8px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: center;
+}
+.page-jump:focus { outline: 2px solid #4361ee; border-color: transparent; }
+.page-jump::-webkit-inner-spin-button,
+.page-jump::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.page-jump { -moz-appearance: textfield; }
 
 .table-scroll {
   overflow: auto;
