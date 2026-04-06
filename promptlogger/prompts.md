@@ -269,3 +269,7 @@
 
 > ok so on the charts tab the default displayed charts should be: Wind speed (m/s), Wind direction (°), Nacelle position (°), Power (kW) and Rotor speed, Standard deviation (RPM)
 
+## Entry 67 - 2026-04-06
+
+> ok add also Generator RPM (RPM) to default charts
+
