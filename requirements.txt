@@ -5,6 +5,7 @@ fastapi
 uvicorn[standard]
 pydantic-settings
 duckdb
+boto3
 pytest
 pytest-cov
 pytest-benchmark
