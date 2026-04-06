@@ -261,3 +261,7 @@
 
 > ok switch the order of the tabs - data table should be first, then charts and quality report at the end
 
+## Entry 65 - 2026-04-06
+
+> ok, there is some new code, add tests for it and push everything to github
+
