@@ -261,6 +261,9 @@ const loading = ref(false)
 const error   = ref('')
 const result  = ref(null)
 
+/** Which results tab is active: 'report' | 'table' */
+const activeTab = ref('report')
+
 // ── Sort & filter state ────────────────────────────────────────────────────
 const globalFilter   = ref('')   // global search string
 const colFilters     = ref([])   // per-column filter strings (indexed by column index)
@@ -487,11 +490,12 @@ async function fetchData() {
       selectedFileType.value,
       cols
     )
-    // Reset sort and filters for the new dataset
+    // Reset sort, filters and active tab for the new dataset
     globalFilter.value = ''
     colFilters.value   = Array(result.value.columns.length).fill('')
     sortCol.value      = null
     sortDir.value      = 1
+    activeTab.value    = 'report'
   } catch (e) {
     error.value = e.message
   } finally {
