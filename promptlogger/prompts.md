@@ -249,3 +249,7 @@
 
 > ok, now I want another tab with charts of those data. Use charts js library
 
+## Entry 62 - 2026-04-06
+
+> ok so it works slowly because there are a lot of rows loaded. Add a pagination there and display only 50 rows at the same moment with the possibility to switch forward and backward with the rows
+
