@@ -25,3 +25,7 @@ data/
 .benchmarks/Windows*/
 .benchmarks/Darwin*/
 
+
+# Environment secrets
+.env
+.r2_cache/

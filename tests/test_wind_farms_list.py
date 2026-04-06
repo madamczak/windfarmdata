@@ -10,12 +10,12 @@ Verifies that the endpoint:
 - 'total' matches the length of 'wind_farms'
 """
 
-import pytest
+import pytest  # noqa: F401 — used implicitly by fixtures
 from fastapi.testclient import TestClient
 
 
-KNOWN_FARM_NAMES = {"Kelmarsh", "Penmanshiel", "Hill of Towie"}
-KNOWN_FARM_DIRS = {"kelmarsh", "penmanshiel", "hill_of_towie"}
+KNOWN_FARM_NAMES = {"Kelmarsh", "Penmanshiel"}
+KNOWN_FARM_DIRS  = {"kelmarsh", "penmanshiel"}
 
 
 class TestListWindFarms:

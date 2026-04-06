@@ -29,13 +29,25 @@ logger = logging.getLogger("windfarm.routers.wind_farms")
 
 router = APIRouter(prefix="/wind-farms", tags=["Wind Farms"])
 
-# Canonical mapping: display name → directory name under data/
-# Order determines the order returned by the API.
+# Canonical mapping: display name → directory name.
+# Hill of Towie is excluded — only Kelmarsh and Penmanshiel are active.
 WIND_FARM_MAP: list[tuple[str, str]] = [
     ("Kelmarsh", "kelmarsh"),
     ("Penmanshiel", "penmanshiel"),
-    ("Hill of Towie", "hill_of_towie"),
 ]
+
+
+def _resolve_farm_dir(dir_name: str) -> str:
+    """Return the local filesystem path for *dir_name*.
+
+    In local mode:  data/<dir_name>
+    In r2 mode:     download from R2 into .r2_cache/<dir_name> and return that path
+    """
+    if settings.storage_backend == "r2":
+        from backend.services.r2_service import get_farm_dir
+        return get_farm_dir(dir_name)
+    base = os.path.abspath(settings.parquet_base_path)
+    return os.path.join(base, dir_name)
 
 
 def count_turbines(farm_dir: str) -> int:
@@ -85,12 +97,11 @@ def count_turbines(farm_dir: str) -> int:
 )
 def list_wind_farms() -> WindFarmsResponse:
     """Return wind farms whose data directory exists on disk, with turbine counts."""
-    base = os.path.abspath(settings.parquet_base_path)
-    logger.info("list_wind_farms: base path='%s'", base)
+    logger.info("list_wind_farms: storage_backend='%s'", settings.storage_backend)
 
     available: list[WindFarm] = []
     for display_name, dir_name in WIND_FARM_MAP:
-        farm_path = os.path.join(base, dir_name)
+        farm_path = _resolve_farm_dir(dir_name)
         if os.path.isdir(farm_path):
             turbine_count = count_turbines(farm_path)
             logger.debug(
@@ -127,12 +138,11 @@ def list_wind_farms() -> WindFarmsResponse:
 )
 def get_wind_farm_time_ranges() -> WindFarmTimeRangesResponse:
     """Scan all parquet files per farm and return their earliest/latest timestamps."""
-    base = os.path.abspath(settings.parquet_base_path)
-    logger.info("get_wind_farm_time_ranges: base path='%s'", base)
+    logger.info("get_wind_farm_time_ranges: storage_backend='%s'", settings.storage_backend)
 
     results = []
     for _, dir_name in WIND_FARM_MAP:
-        farm_dir = os.path.join(base, dir_name)
+        farm_dir = _resolve_farm_dir(dir_name)
         if not os.path.isdir(farm_dir):
             logger.warning(
                 "get_wind_farm_time_ranges: skipping '%s' — directory not found",
@@ -168,7 +178,7 @@ def get_wind_farm_time_ranges() -> WindFarmTimeRangesResponse:
 
 
 # Farms supported by the /columns endpoint.
-SCADA_FARMS = ["kelmarsh", "penmanshiel", "hill_of_towie"]
+SCADA_FARMS = ["kelmarsh", "penmanshiel"]
 
 
 @router.get(
@@ -187,12 +197,11 @@ SCADA_FARMS = ["kelmarsh", "penmanshiel", "hill_of_towie"]
 )
 def get_wind_farm_columns() -> FarmColumnsResponse:
     """Read parquet schemas and return column names grouped by file type."""
-    base = os.path.abspath(settings.parquet_base_path)
-    logger.info("get_wind_farm_columns: base path='%s'", base)
+    logger.info("get_wind_farm_columns: storage_backend='%s'", settings.storage_backend)
 
     farms = []
     for dir_name in SCADA_FARMS:
-        farm_dir = os.path.join(base, dir_name)
+        farm_dir = _resolve_farm_dir(dir_name)
         if not os.path.isdir(farm_dir):
             logger.warning(
                 "get_wind_farm_columns: skipping '%s' — directory not found",
@@ -230,13 +239,8 @@ VALID_FARMS = {dir_name for _, dir_name in WIND_FARM_MAP}
 # Kelmarsh / Penmanshiel: <file_type>_turbine_N.parquet
 # Hill of Towie:          T{N}_<file_type>.parquet
 VALID_FILE_TYPES: dict[str, set[str]] = {
-    "kelmarsh": {"data", "status"},
+    "kelmarsh":   {"data", "status"},
     "penmanshiel": {"data", "status"},
-    "hill_of_towie": {
-        "AlarmLog", "DailySummary", "SCTurbine", "SCTurCount",
-        "SCTurDigiIn", "SCTurDigiOut", "SCTurFlag", "SCTurGrid",
-        "SCTurIntern", "SCTurPress", "SCTurTemp",
-    },
 }
 
 
@@ -275,7 +279,6 @@ def get_day_data(
         columns if columns else "(all)",
     )
 
-    base = os.path.abspath(settings.parquet_base_path)
 
     # Validate farm name to prevent path traversal
     if farm not in VALID_FARMS:
@@ -303,7 +306,7 @@ def get_day_data(
             ),
         )
 
-    farm_dir = os.path.join(base, farm)
+    farm_dir = _resolve_farm_dir(farm)
     if not os.path.isdir(farm_dir):
         logger.error(
             "get_day_data: farm='%s' — directory missing at '%s'",

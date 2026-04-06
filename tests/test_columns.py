@@ -9,7 +9,7 @@ Verifies that the endpoint:
 - Known file types are present for each farm
 """
 
-import pytest
+import pytest  # noqa: F401 — used implicitly by fixtures
 from fastapi.testclient import TestClient
 
 
@@ -19,9 +19,6 @@ EXPECTED_TYPES = {
     "kelmarsh": {"data", "status"},
     "penmanshiel": {"data", "status"},
 }
-
-# Hill of Towie uses sensor-table naming — just verify a non-empty dict.
-HOT_FARM = "hill_of_towie"
 
 
 class TestColumns:
@@ -98,14 +95,12 @@ class TestColumns:
                 f"Farm '{farm}' is missing file types: {missing}"
             )
 
-    def test_hill_of_towie_has_at_least_one_file_type(self, mock_client: TestClient):
-        """Hill of Towie must expose at least one sensor file type."""
+    def test_hill_of_towie_not_in_response(self, mock_client: TestClient):
+        """Hill of Towie has been removed from the active farm list."""
         data = mock_client.get("/wind-farms/columns").json()
-        farm_map = {e["farm"]: e["columns_by_type"] for e in data["farms"]}
-
-        assert HOT_FARM in farm_map, "Hill of Towie not present in response"
-        assert len(farm_map[HOT_FARM]) > 0, (
-            "Hill of Towie has no file types in columns_by_type"
+        farm_names = {e["farm"] for e in data["farms"]}
+        assert "hill_of_towie" not in farm_names, (
+            "Hill of Towie should not appear in /columns response"
         )
 
     def test_no_duplicate_farm_entries(self, client: TestClient):
