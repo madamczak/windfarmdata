@@ -309,3 +309,7 @@
 
 > based on pdf instruction in polish language located C:\Users\adamc\PycharmProjects\windfarmdata\instructions\Uruchomienie i połączenie stacku LGTM z aplikacją FastAPI-2.pdf I want an lgtm stack to be included in the backend service. I also want the lgtm docker image to run
 
+## Entry 77 - 2026-04-14
+
+> ok so opentelemetry was installed etc. check if everything works, and run it if possible. I've seen that lgtm stac was added to docker compose
+

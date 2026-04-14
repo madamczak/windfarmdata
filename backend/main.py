@@ -3,6 +3,11 @@ Wind Farm Data API — entry point.
 
 Run locally with:
     uvicorn backend.main:app --reload
+
+Observability (LGTM stack):
+    Traces  → Tempo  via OTel Collector (OTEL_EXPORTER_OTLP_ENDPOINT)
+    Logs    → Loki   via python-logging-loki (LOKI_ENDPOINT)
+    Metrics → Mimir  via /metrics endpoint scraped by Prometheus
 """
 
 import logging
@@ -14,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 import uvicorn
 from backend.routers import wind_farms
+from backend.telemetry import REQUEST_TIME, metrics_response, setup_telemetry
 
 # ---------------------------------------------------------------------------
 # Logging configuration
@@ -51,6 +57,8 @@ CORS_ORIGINS = (
 async def lifespan(app: FastAPI):
     logger.info("Wind Farm Data API starting up — version %s", app.version)
     logger.debug("CORS origins: %s", CORS_ORIGINS)
+    # Wire up LGTM observability (tracing, Loki logging, Prometheus metrics)
+    setup_telemetry(app)
     yield
     logger.info("Wind Farm Data API shutting down.")
 
@@ -84,8 +92,17 @@ app.add_middleware(
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next) -> Response:
-    """Log every incoming request and its response status + duration."""
+    """Log every incoming request and its response status + duration.
+
+    Also records the request processing time in the Prometheus REQUEST_TIME
+    summary, labelled by HTTP method + first path segment so the /metrics
+    endpoint stays separate from noisy per-turbine paths.
+    """
     start = time.perf_counter()
+    # Build a stable tracking label (e.g. "GET /wind-farms")
+    first_segment = request.url.path.split("/")[1] if request.url.path != "/" else ""
+    tracking_id = f"{request.method} /{first_segment}"
+
     logger.info(
         "REQUEST  %s %s  client=%s  query=%s",
         request.method,
@@ -93,7 +110,10 @@ async def log_requests(request: Request, call_next) -> Response:
         request.client.host if request.client else "unknown",
         str(request.query_params) or "(none)",
     )
-    response: Response = await call_next(request)
+
+    with REQUEST_TIME.labels(endpoint=tracking_id).time():
+        response: Response = await call_next(request)
+
     elapsed_ms = (time.perf_counter() - start) * 1000
     logger.info(
         "RESPONSE %s %s  status=%d  duration=%.1f ms",
@@ -103,6 +123,16 @@ async def log_requests(request: Request, call_next) -> Response:
         elapsed_ms,
     )
     return response
+
+
+# ---------------------------------------------------------------------------
+# Prometheus /metrics endpoint — scraped by Prometheus every 5 s
+# ---------------------------------------------------------------------------
+
+@app.get("/metrics", include_in_schema=False, tags=["Observability"])
+def get_metrics() -> Response:
+    """Expose Prometheus metrics for the LGTM stack."""
+    return metrics_response()
 
 
 # ---------------------------------------------------------------------------

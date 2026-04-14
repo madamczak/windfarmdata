@@ -1,5 +1,5 @@
 # =============================================================================
-# docker-compose.yml — Wind Farm Data (backend + frontend)
+# docker-compose.yml — Wind Farm Data (backend + frontend + LGTM observability)
 #
 # Usage:
 #   # Start everything (mounts local data/ as read-only into backend)
@@ -11,11 +11,30 @@
 #   # Stop and remove containers (data volume is preserved)
 #   docker compose down
 #
-# The local data/ directory is mounted read-only into the backend container.
-# No parquet files are baked into the image.
+# LGTM stack (Loki + Grafana + Tempo + Mimir) is provided by grafana/otel-lgtm.
+# Grafana UI:       http://localhost:3000   (admin / admin)
+# Prometheus UI:    http://localhost:9090
+# OTel Collector:   http://localhost:4317 (gRPC) / http://localhost:4318 (HTTP)
 # =============================================================================
 
 services:
+
+  # ---------------------------------------------------------------------------
+  # LGTM — Grafana all-in-one observability stack
+  # (Loki + Grafana + Tempo + Mimir + OpenTelemetry Collector + Prometheus)
+  # ---------------------------------------------------------------------------
+  lgtm:
+    image: grafana/otel-lgtm:latest
+    container_name: windfarmdata-lgtm
+    ports:
+      - "3000:3000"   # Grafana UI
+      - "3100:3100"   # Loki
+      - "4317:4317"   # OTel Collector gRPC
+      - "4318:4318"   # OTel Collector HTTP
+      - "9090:9090"   # Prometheus / Mimir
+    volumes:
+      - ./prometheus.yaml:/otel-lgtm/prometheus.yaml
+    restart: unless-stopped
 
   # ---------------------------------------------------------------------------
   # Backend — FastAPI served by Uvicorn
@@ -35,7 +54,6 @@ services:
       - path: .env
         required: false
 
-
     environment:
       # Always use R2 as the storage backend in Docker (parquet files in R2)
       STORAGE_BACKEND: "r2"
@@ -46,11 +64,16 @@ services:
       # In PowerShell set them with:
       #   $env:R2_ACCESS_KEY_ID      = "your-key"
       #   $env:R2_SECRET_ACCESS_KEY  = "your-secret"
-      # Listing the key name with no value tells Compose to inherit from host.
       R2_ACCESS_KEY_ID:
       R2_SECRET_ACCESS_KEY:
       R2_ENDPOINT_URL: "https://7cf52f0e0957036ef8b28411ed958be4.r2.cloudflarestorage.com"
       R2_BUCKET_NAME: "windfarmdata"
+      # Telemetry — point to the lgtm service inside the Docker network
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://lgtm:4318"
+      LOKI_ENDPOINT: "http://lgtm:3100/loki/api/v1/push"
+
+    depends_on:
+      - lgtm
 
     ports:
       # Expose directly for development; in production only Nginx needs access
@@ -92,3 +115,5 @@ services:
       start_period: 10s
 
 # (no named volumes required — R2 data is accessed directly over S3)
+
+

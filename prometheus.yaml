@@ -1,0 +1,15 @@
+# prometheus.yaml — Prometheus scrape configuration for the LGTM stack.
+#
+# Prometheus polls the /metrics endpoint of the FastAPI backend every 5 s.
+# Inside Docker Compose "backend" resolves to the backend service container.
+# For standalone Docker usage (grafana/otel-lgtm run separately from the app)
+# use host.docker.internal:8000 instead.
+
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: 'fastapi'
+    static_configs:
+      - targets: ['backend:8000']
+
