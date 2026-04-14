@@ -1,22 +1,21 @@
 """
-Tests for backend/services/r2_service.py and the _resolve_farm_dir helper
-in backend/routers/wind_farms.py.
+Tests for backend/services/r2_service.py.
 
-All R2 network calls are mocked via unittest.mock so no real Cloudflare
-credentials or network access are required.
+All R2 / boto3 network calls are mocked so no real Cloudflare credentials
+or network access are required.
 """
 
-import pytest  # noqa: F401 — needed for tmp_path fixture injection
 from unittest.mock import MagicMock, patch
-from fastapi.testclient import TestClient
 
-from backend import config as backend_config
-from backend.main import app
+import pytest
+
 import backend.services.r2_service as r2_module
 from backend.services.r2_service import (
-    get_farm_dir,
+    get_farm_prefix,
+    list_farm_files,
     list_remote_farms,
-    _sync_farm,
+    configure_s3_duckdb,
+    _r2_host,
 )
 
 
@@ -24,25 +23,124 @@ from backend.services.r2_service import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_s3_client_mock(objects: list[dict] | None = None):
-    """Return a mock boto3 S3 client that lists the given objects."""
-    client = MagicMock()
-
-    # list_objects_v2 — used by list_remote_farms
-    client.list_objects_v2.return_value = {
-        "CommonPrefixes": [{"Prefix": "kelmarsh/"}, {"Prefix": "penmanshiel/"}]
-    }
-
-    # paginate — used by _sync_farm
+def _make_paginator(objects: list[dict] | None = None):
+    """Return a mock paginator that yields one page with *objects*."""
     page_contents = objects or [
         {"Key": "kelmarsh/data_turbine_1.parquet", "Size": 1024},
         {"Key": "kelmarsh/status_turbine_1.parquet", "Size": 512},
     ]
     paginator = MagicMock()
     paginator.paginate.return_value = [{"Contents": page_contents}]
-    client.get_paginator.return_value = paginator
+    return paginator
 
+
+def _make_s3_client(objects: list[dict] | None = None):
+    """Return a mock boto3 S3 client."""
+    client = MagicMock()
+    client.list_objects_v2.return_value = {
+        "CommonPrefixes": [{"Prefix": "kelmarsh/"}, {"Prefix": "penmanshiel/"}]
+    }
+    client.get_paginator.return_value = _make_paginator(objects)
     return client
+
+
+# ---------------------------------------------------------------------------
+# get_farm_prefix
+# ---------------------------------------------------------------------------
+
+class TestGetFarmPrefix:
+    """Tests for r2_service.get_farm_prefix()."""
+
+    def test_returns_s3_url(self):
+        """Should return s3://<bucket>/<farm>/."""
+        result = get_farm_prefix("kelmarsh")
+        assert result.startswith("s3://")
+        assert "kelmarsh" in result
+        assert result.endswith("/")
+
+    def test_different_farms_produce_different_prefixes(self):
+        """Each farm name should produce a unique prefix."""
+        assert get_farm_prefix("kelmarsh") != get_farm_prefix("penmanshiel")
+
+
+# ---------------------------------------------------------------------------
+# _r2_host
+# ---------------------------------------------------------------------------
+
+class TestR2Host:
+    """Tests for r2_service._r2_host()."""
+
+    def test_strips_https_prefix(self):
+        """Should strip https:// from the endpoint URL."""
+        host = _r2_host()
+        assert not host.startswith("https://")
+        assert not host.startswith("http://")
+
+    def test_returns_non_empty_string(self):
+        result = _r2_host()
+        assert isinstance(result, str) and result
+
+
+# ---------------------------------------------------------------------------
+# list_farm_files
+# ---------------------------------------------------------------------------
+
+class TestListFarmFiles:
+    """Tests for r2_service.list_farm_files()."""
+
+    def test_returns_s3_urls(self):
+        """Each returned path should be a valid s3:// URL."""
+        with patch("backend.services.r2_service._build_client") as mock_build:
+            mock_build.return_value = _make_s3_client()
+            result = list_farm_files("kelmarsh")
+        assert all(url.startswith("s3://") for url in result)
+
+    def test_returns_only_parquet_files(self):
+        """Non-parquet objects should be filtered out."""
+        objects = [
+            {"Key": "kelmarsh/README.txt", "Size": 100},
+            {"Key": "kelmarsh/data_turbine_1.parquet", "Size": 1024},
+            {"Key": "kelmarsh/", "Size": 0},   # directory placeholder
+        ]
+        with patch("backend.services.r2_service._build_client") as mock_build:
+            mock_build.return_value = _make_s3_client(objects)
+            result = list_farm_files("kelmarsh")
+        assert len(result) == 1
+        assert result[0].endswith(".parquet")
+
+    def test_returns_sorted_list(self):
+        """Results should be sorted for deterministic ordering."""
+        objects = [
+            {"Key": "kelmarsh/data_turbine_2.parquet", "Size": 512},
+            {"Key": "kelmarsh/data_turbine_1.parquet", "Size": 512},
+        ]
+        with patch("backend.services.r2_service._build_client") as mock_build:
+            mock_build.return_value = _make_s3_client(objects)
+            result = list_farm_files("kelmarsh")
+        assert result == sorted(result)
+
+    def test_returns_empty_list_on_client_error(self):
+        """Should return [] on boto3 error, not raise."""
+        from botocore.exceptions import ClientError
+        with patch("backend.services.r2_service._build_client") as mock_build:
+            client = MagicMock()
+            client.get_paginator.side_effect = ClientError(
+                {"Error": {"Code": "NoSuchBucket", "Message": "x"}}, "ListObjectsV2"
+            )
+            mock_build.return_value = client
+            result = list_farm_files("kelmarsh")
+        assert result == []
+
+    def test_skips_nested_objects(self):
+        """Objects with a slash after the farm prefix should be skipped."""
+        objects = [
+            {"Key": "kelmarsh/sub/data_turbine_1.parquet", "Size": 1024},
+            {"Key": "kelmarsh/data_turbine_1.parquet", "Size": 1024},
+        ]
+        with patch("backend.services.r2_service._build_client") as mock_build:
+            mock_build.return_value = _make_s3_client(objects)
+            result = list_farm_files("kelmarsh")
+        assert len(result) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -52,13 +150,20 @@ def _make_s3_client_mock(objects: list[dict] | None = None):
 class TestListRemoteFarms:
     """Tests for r2_service.list_remote_farms()."""
 
-    def test_returns_list_of_farm_names(self):
+    def test_returns_farm_names(self):
         """Should return the prefix names with trailing slash stripped."""
         with patch("backend.services.r2_service._build_client") as mock_build:
-            mock_build.return_value = _make_s3_client_mock()
+            mock_build.return_value = _make_s3_client()
             result = list_remote_farms()
         assert "kelmarsh" in result
         assert "penmanshiel" in result
+
+    def test_strips_trailing_slash(self):
+        """Farm names returned should not contain a trailing slash."""
+        with patch("backend.services.r2_service._build_client") as mock_build:
+            mock_build.return_value = _make_s3_client()
+            result = list_remote_farms()
+        assert all(not name.endswith("/") for name in result)
 
     def test_returns_empty_on_client_error(self):
         """Should return [] on boto3 error, not raise."""
@@ -74,141 +179,25 @@ class TestListRemoteFarms:
 
 
 # ---------------------------------------------------------------------------
-# _sync_farm
+# configure_s3_duckdb
 # ---------------------------------------------------------------------------
 
-class TestSyncFarm:
-    """Tests for r2_service._sync_farm()."""
+class TestConfigureS3DuckDB:
+    """Tests for r2_service.configure_s3_duckdb()."""
 
-    def test_downloads_parquet_files(self, tmp_path):
-        """Should call download_file for each .parquet object."""
-        objects = [
-            {"Key": "kelmarsh/data_turbine_1.parquet", "Size": 1024},
-            {"Key": "kelmarsh/status_turbine_1.parquet", "Size": 512},
-        ]
-        with patch("backend.services.r2_service._build_client") as mock_build:
-            mock_client = _make_s3_client_mock(objects)
-            mock_build.return_value = mock_client
-            _sync_farm("kelmarsh", str(tmp_path / "kelmarsh"))
+    def test_executes_required_statements(self):
+        """Should execute INSTALL httpfs, LOAD httpfs and SET statements."""
+        conn = MagicMock()
+        configure_s3_duckdb(conn)
+        calls = [str(c) for c in conn.execute.call_args_list]
+        full_sql = " ".join(calls).lower()
+        assert "httpfs" in full_sql
+        assert "s3_access_key_id" in full_sql
+        assert "s3_secret_access_key" in full_sql
 
-        assert mock_client.download_file.call_count == 2
-
-    def test_skips_non_parquet_objects(self, tmp_path):
-        """Objects without .parquet extension should not be downloaded."""
-        objects = [
-            {"Key": "kelmarsh/", "Size": 0},               # directory placeholder
-            {"Key": "kelmarsh/README.txt", "Size": 100},   # non-parquet
-            {"Key": "kelmarsh/data_turbine_1.parquet", "Size": 1024},
-        ]
-        with patch("backend.services.r2_service._build_client") as mock_build:
-            mock_client = _make_s3_client_mock(objects)
-            mock_build.return_value = mock_client
-            _sync_farm("kelmarsh", str(tmp_path / "kelmarsh"))
-
-        assert mock_client.download_file.call_count == 1
-
-    def test_skips_already_cached_files(self, tmp_path):
-        """Files already in cache with matching size should not be re-downloaded."""
-        farm_dir = tmp_path / "kelmarsh"
-        farm_dir.mkdir()
-        cached = farm_dir / "data_turbine_1.parquet"
-        cached.write_bytes(b"x" * 1024)  # size matches
-
-        objects = [{"Key": "kelmarsh/data_turbine_1.parquet", "Size": 1024}]
-        with patch("backend.services.r2_service._build_client") as mock_build:
-            mock_client = _make_s3_client_mock(objects)
-            mock_build.return_value = mock_client
-            _sync_farm("kelmarsh", str(farm_dir))
-
-        mock_client.download_file.assert_not_called()
-
-    def test_download_error_is_logged_not_raised(self, tmp_path):
-        """A failed download should log the error and continue, not raise."""
-        from botocore.exceptions import ClientError
-        objects = [
-            {"Key": "kelmarsh/data_turbine_1.parquet", "Size": 1024},
-            {"Key": "kelmarsh/data_turbine_2.parquet", "Size": 1024},
-        ]
-        with patch("backend.services.r2_service._build_client") as mock_build:
-            mock_client = _make_s3_client_mock(objects)
-            mock_client.download_file.side_effect = ClientError(
-                {"Error": {"Code": "NoSuchKey", "Message": "x"}}, "GetObject"
-            )
-            mock_build.return_value = mock_client
-            # Should not raise
-            _sync_farm("kelmarsh", str(tmp_path / "kelmarsh"))
-
-
-# ---------------------------------------------------------------------------
-# get_farm_dir — cache behaviour
-# ---------------------------------------------------------------------------
-
-class TestGetFarmDir:
-    """Tests for r2_service.get_farm_dir()."""
-
-    def setup_method(self):
-        """Clear the in-process sync cache before each test."""
-        r2_module._synced.clear()
-
-    def test_returns_local_path_under_cache_dir(self, tmp_path):
-        """get_farm_dir should return a path inside r2_cache_dir."""
-        original_cache = backend_config.settings.r2_cache_dir
-        backend_config.settings.r2_cache_dir = str(tmp_path)
-        try:
-            with patch("backend.services.r2_service._sync_farm"):
-                result = get_farm_dir("kelmarsh")
-            assert result == str(tmp_path / "kelmarsh")
-        finally:
-            backend_config.settings.r2_cache_dir = original_cache
-
-    def test_syncs_on_first_access(self, tmp_path):
-        """_sync_farm should be called the first time a farm is requested."""
-        original_cache = backend_config.settings.r2_cache_dir
-        backend_config.settings.r2_cache_dir = str(tmp_path)
-        try:
-            with patch("backend.services.r2_service._sync_farm") as mock_sync:
-                get_farm_dir("kelmarsh")
-            mock_sync.assert_called_once()
-        finally:
-            backend_config.settings.r2_cache_dir = original_cache
-
-    def test_does_not_sync_on_second_access(self, tmp_path):
-        """_sync_farm should NOT be called again for an already-cached farm."""
-        original_cache = backend_config.settings.r2_cache_dir
-        backend_config.settings.r2_cache_dir = str(tmp_path)
-        try:
-            with patch("backend.services.r2_service._sync_farm") as mock_sync:
-                get_farm_dir("kelmarsh")
-                get_farm_dir("kelmarsh")
-            assert mock_sync.call_count == 1
-        finally:
-            backend_config.settings.r2_cache_dir = original_cache
-
-
-# ---------------------------------------------------------------------------
-# _resolve_farm_dir — router branch for R2
-# ---------------------------------------------------------------------------
-
-class TestResolveFarmDirR2:
-    """Tests for the _resolve_farm_dir helper when storage_backend == 'r2'."""
-
-    def test_r2_backend_calls_get_farm_dir(self, tmp_farm_dir):
-        """When storage_backend='r2', endpoints should use r2_service.get_farm_dir."""
-        r2_module._synced.clear()
-        original_backend = backend_config.settings.storage_backend
-        original_cache   = backend_config.settings.r2_cache_dir
-        # Point r2 cache at our mock farm data so the endpoint can work
-        backend_config.settings.storage_backend = "r2"
-        backend_config.settings.r2_cache_dir    = str(tmp_farm_dir)
-        try:
-            with patch("backend.services.r2_service._sync_farm"):
-                client = TestClient(app)
-                response = client.get("/wind-farms")
-            assert response.status_code == 200
-            farms = {f["directory"] for f in response.json()["wind_farms"]}
-            assert "kelmarsh" in farms
-        finally:
-            backend_config.settings.storage_backend = original_backend
-            backend_config.settings.r2_cache_dir    = original_cache
-            r2_module._synced.clear()
-
+    def test_raises_on_duckdb_error(self):
+        """Should propagate exceptions from DuckDB execute calls."""
+        conn = MagicMock()
+        conn.execute.side_effect = RuntimeError("duckdb error")
+        with pytest.raises(RuntimeError):
+            configure_s3_duckdb(conn)

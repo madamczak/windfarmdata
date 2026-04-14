@@ -3,6 +3,7 @@ Shared pytest fixtures and configuration for the wind farm API test suite.
 """
 
 import os
+
 from datetime import datetime
 import pytest
 import pyarrow as pa
@@ -14,13 +15,21 @@ from backend import config as backend_config
 
 
 # ---------------------------------------------------------------------------
-# FastAPI test client (uses real data/ directory — skips when absent)
+# FastAPI test clients — always use local mock parquet data (fast, offline)
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="session")
-def client() -> TestClient:
-    """Return a TestClient wired to the FastAPI application."""
-    return TestClient(app)
+def client(tmp_farm_dir) -> TestClient:
+    """TestClient pointed at temporary mock farm directory. Fast and offline."""
+    original_backend = backend_config.settings.storage_backend
+    original_path = backend_config.settings.parquet_base_path
+    backend_config.settings.storage_backend = "local"
+    backend_config.settings.parquet_base_path = str(tmp_farm_dir)
+    try:
+        yield TestClient(app)
+    finally:
+        backend_config.settings.storage_backend = original_backend
+        backend_config.settings.parquet_base_path = original_path
 
 
 # ---------------------------------------------------------------------------
@@ -112,14 +121,16 @@ def tmp_farm_dir(tmp_path_factory):
 @pytest.fixture(scope="session")
 def mock_client(tmp_farm_dir) -> TestClient:
     """
-    Return a TestClient whose parquet_base_path points at the temporary mock
-    farm directory.  All three farms (kelmarsh, penmanshiel, hill_of_towie)
-    are present with minimal parquet data so no real data/ directory is needed.
+    Alias for client — TestClient pointed at temporary mock farm directory.
+    Both client and mock_client force storage_backend=local.
     """
-    original = backend_config.settings.parquet_base_path
+    original_backend = backend_config.settings.storage_backend
+    original_path = backend_config.settings.parquet_base_path
+    backend_config.settings.storage_backend = "local"
     backend_config.settings.parquet_base_path = str(tmp_farm_dir)
     try:
         yield TestClient(app)
     finally:
-        backend_config.settings.parquet_base_path = original
+        backend_config.settings.storage_backend = original_backend
+        backend_config.settings.parquet_base_path = original_path
 

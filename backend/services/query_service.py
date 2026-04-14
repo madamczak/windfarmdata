@@ -46,8 +46,8 @@ def _make_duckdb_conn():
     """Create a DuckDB in-memory connection, configuring httpfs when in R2 mode."""
     conn = duckdb.connect()
     if settings.storage_backend == "r2":
-        from backend.services.r2_service import configure_s3_duckdb
-        configure_s3_duckdb(conn)
+        import backend.services.r2_service as _r2
+        _r2.configure_s3_duckdb(conn)
     return conn
 
 
@@ -142,17 +142,21 @@ def _list_farm_parquet_files(farm_dir_or_prefix: str) -> list[str]:
     For R2: uses r2_service.list_farm_files — boto3 metadata listing only.
     """
     if _is_s3_path(farm_dir_or_prefix):
-        from backend.services.r2_service import list_farm_files
+        import backend.services.r2_service as _r2
         # Extract farm name from s3://bucket/farm/
         parts = farm_dir_or_prefix.rstrip("/").split("/")
         farm = parts[-1]
-        return list_farm_files(farm)
+        return _r2.list_farm_files(farm)
     return sorted(glob.glob(os.path.join(farm_dir_or_prefix, "*.parquet")))
 
 
 def _basename(path: str) -> str:
     """Return the filename portion of a local path or S3 URL."""
-    return path.rstrip("/").split("/")[-1]
+    # S3 URLs always use forward slashes; local paths may use backslash on Windows.
+    # posixpath / os.path.basename both handle the cases correctly together.
+    if path.startswith("s3://"):
+        return path.rstrip("/").split("/")[-1]
+    return os.path.basename(path)
 
 
 def get_time_range(farm_dir: str) -> tuple[object, object, str | None]:

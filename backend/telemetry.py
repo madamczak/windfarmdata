@@ -177,25 +177,33 @@ def setup_tracing(app: FastAPI) -> None:
     MUST be called at module level in main.py — before add_middleware and
     include_router — so that FastAPIInstrumentor can wrap the ASGI app
     before any requests arrive.
+
+    During pytest runs (PYTEST_CURRENT_TEST env var is set by pytest) the
+    OTLP exporter is skipped entirely so no network calls are made to the
+    collector. A plain TracerProvider with no exporters is used instead.
     """
-    otlp_base = os.environ.get(
-        "OTEL_EXPORTER_OTLP_ENDPOINT", _DEFAULT_OTLP_ENDPOINT
-    ).rstrip("/")
+    _log = logging.getLogger("windfarm.telemetry")
 
     resource = Resource.create({"service.name": SERVICE_NAME})
     provider = TracerProvider(resource=resource)
-    exporter = OTLPSpanExporter(endpoint=f"{otlp_base}/v1/traces")
-    provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+    # Skip OTLP export when running under pytest — avoids connection-timeout
+    # delays against localhost:4318 which is not running during tests.
+    if not os.environ.get("PYTEST_CURRENT_TEST") and not os.environ.get("TESTING"):
+        otlp_base = os.environ.get(
+            "OTEL_EXPORTER_OTLP_ENDPOINT", _DEFAULT_OTLP_ENDPOINT
+        ).rstrip("/")
+        exporter = OTLPSpanExporter(endpoint=f"{otlp_base}/v1/traces")
+        provider.add_span_processor(SimpleSpanProcessor(exporter))
+        _log.info(
+            "OpenTelemetry tracing configured -> %s/v1/traces  (service=%s)",
+            otlp_base, SERVICE_NAME,
+        )
+    else:
+        _log.debug("OpenTelemetry tracing: no-op mode (test environment, OTLP export disabled)")
+
     trace.set_tracer_provider(provider)
-
-    # Instrument FastAPI — adds an ASGI middleware that creates a span for
-    # every HTTP request.  Must happen before the app starts handling traffic.
     FastAPIInstrumentor.instrument_app(app, tracer_provider=provider)
-
-    logging.getLogger("windfarm.telemetry").info(
-        "OpenTelemetry tracing configured -> %s/v1/traces  (service=%s)",
-        otlp_base, SERVICE_NAME,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +211,16 @@ def setup_tracing(app: FastAPI) -> None:
 # ---------------------------------------------------------------------------
 
 def setup_loki_logging() -> None:
-    """Attach Loki handlers to the windfarm and uvicorn logger hierarchies."""
+    """Attach Loki handlers to the windfarm and uvicorn logger hierarchies.
+
+    Skipped during pytest runs to avoid network calls to the Loki endpoint.
+    """
+    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("TESTING"):
+        logging.getLogger("windfarm.telemetry").debug(
+            "Loki logging: disabled in test environment"
+        )
+        return
+
     loki_url = os.environ.get("LOKI_ENDPOINT", _DEFAULT_LOKI_ENDPOINT)
     setup_log = logging.getLogger("windfarm.telemetry")
 

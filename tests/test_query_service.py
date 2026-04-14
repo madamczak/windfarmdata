@@ -9,11 +9,20 @@ is required.
 import os
 import pytest
 from datetime import date
+from unittest.mock import MagicMock, patch
 
 from backend.services.query_service import (
     get_time_range,
     get_columns_by_file_type,
     get_data_for_date,
+    _is_s3_path,
+    _basename,
+    _list_farm_parquet_files,
+    _make_duckdb_conn,
+    _detect_timestamp_column_from_schema,
+    _detect_timestamp_column_via_duckdb,
+    _get_schema_columns,
+    _files_for_type,
 )
 
 
@@ -233,4 +242,168 @@ class TestGetDataForDate:
         assert len(rows) == 2
         assert "TimeStamp" in cols
         assert "ActivePower" in cols
+
+
+# ---------------------------------------------------------------------------
+# _is_s3_path / _basename helpers
+# ---------------------------------------------------------------------------
+
+class TestHelpers:
+    """Tests for small internal helpers."""
+
+    def test_is_s3_path_true(self):
+        assert _is_s3_path("s3://bucket/farm/file.parquet") is True
+
+    def test_is_s3_path_false(self):
+        assert _is_s3_path("/local/path/file.parquet") is False
+
+    def test_basename_local_unix(self):
+        assert _basename("/some/path/data_turbine_1.parquet") == "data_turbine_1.parquet"
+
+    def test_basename_local_windows(self):
+        assert _basename(r"C:\Users\data\data_turbine_1.parquet") == "data_turbine_1.parquet"
+
+    def test_basename_s3_url(self):
+        assert _basename("s3://bucket/farm/data_turbine_1.parquet") == "data_turbine_1.parquet"
+
+
+# ---------------------------------------------------------------------------
+# _make_duckdb_conn — r2 branch
+# ---------------------------------------------------------------------------
+
+class TestMakeDuckdbConn:
+    """Tests for _make_duckdb_conn()."""
+
+    def test_r2_branch_calls_configure(self):
+        """When storage_backend='r2', configure_s3_duckdb should be called."""
+        import backend.config as cfg
+        original = cfg.settings.storage_backend
+        cfg.settings.storage_backend = "r2"
+        try:
+            # configure_s3_duckdb is lazily imported inside _make_duckdb_conn,
+            # so patch it at its source module.
+            with patch("backend.services.r2_service.configure_s3_duckdb") as mock_r2:
+                conn = _make_duckdb_conn()
+                conn.close()
+            mock_r2.assert_called_once()
+        finally:
+            cfg.settings.storage_backend = original
+
+    def test_local_branch_does_not_call_configure(self):
+        """When storage_backend='local', no S3 config should happen."""
+        import backend.config as cfg
+        original = cfg.settings.storage_backend
+        cfg.settings.storage_backend = "local"
+        try:
+            conn = _make_duckdb_conn()
+            assert conn is not None
+            conn.close()
+        finally:
+            cfg.settings.storage_backend = original
+
+
+# ---------------------------------------------------------------------------
+# _list_farm_parquet_files — S3 branch
+# ---------------------------------------------------------------------------
+
+class TestListFarmParquetFiles:
+    """Tests for _list_farm_parquet_files() S3 branch."""
+
+    def test_s3_branch_calls_list_farm_files(self):
+        """For an s3:// prefix, should delegate to r2_service.list_farm_files."""
+        # list_farm_files is lazily imported inside _list_farm_parquet_files,
+        # so patch it at its source module, not at query_service.
+        with patch("backend.services.r2_service.list_farm_files",
+                   return_value=["s3://bucket/kelmarsh/data_turbine_1.parquet"]) as mock_list:
+            result = _list_farm_parquet_files("s3://bucket/kelmarsh/")
+        mock_list.assert_called_once_with("kelmarsh")
+        assert result == ["s3://bucket/kelmarsh/data_turbine_1.parquet"]
+
+    def test_local_branch_uses_glob(self, tmp_farm_dir):
+        """For a local path, should return sorted glob results."""
+        kelmarsh = str(tmp_farm_dir / "kelmarsh")
+        result = _list_farm_parquet_files(kelmarsh)
+        assert all(f.endswith(".parquet") for f in result)
+        assert result == sorted(result)
+
+
+# ---------------------------------------------------------------------------
+# _detect_timestamp_column_from_schema — S3 branch
+# ---------------------------------------------------------------------------
+
+class TestDetectTimestampColumn:
+    """Tests for _detect_timestamp_column_from_schema() S3 branch."""
+
+    def test_s3_path_delegates_to_duckdb(self):
+        """For an s3:// path, should call _detect_timestamp_column_via_duckdb."""
+        with patch("backend.services.query_service._detect_timestamp_column_via_duckdb",
+                   return_value="Date and time") as mock_fn:
+            result = _detect_timestamp_column_from_schema("s3://bucket/kelmarsh/data_turbine_1.parquet")
+        mock_fn.assert_called_once()
+        assert result == "Date and time"
+
+    def test_via_duckdb_returns_none_on_error(self):
+        """If DuckDB raises, should return None rather than propagating."""
+        with patch("backend.services.query_service._make_duckdb_conn") as mock_conn:
+            mock_conn.return_value.execute.side_effect = RuntimeError("boom")
+            result = _detect_timestamp_column_via_duckdb("s3://bucket/x.parquet")
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _get_schema_columns — S3 branch
+# ---------------------------------------------------------------------------
+
+class TestGetSchemaColumns:
+    """Tests for _get_schema_columns() S3 branch."""
+
+    def test_s3_path_uses_duckdb(self):
+        """For s3:// path, DuckDB DESCRIBE should be used to get columns."""
+        mock_conn = MagicMock()
+        mock_conn.execute.return_value.fetchall.return_value = [
+            ("Date and time",), ("Wind speed (m/s)",)
+        ]
+        with patch("backend.services.query_service._make_duckdb_conn", return_value=mock_conn):
+            result = _get_schema_columns("s3://bucket/kelmarsh/data_turbine_1.parquet")
+        assert result == ["Date and time", "Wind speed (m/s)"]
+
+    def test_s3_path_returns_empty_on_error(self):
+        """If DuckDB raises, should return []."""
+        with patch("backend.services.query_service._make_duckdb_conn") as mock_conn:
+            mock_conn.return_value.execute.side_effect = RuntimeError("boom")
+            result = _get_schema_columns("s3://bucket/kelmarsh/data_turbine_1.parquet")
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# _files_for_type — S3 branch
+# ---------------------------------------------------------------------------
+
+class TestFilesForType:
+    """Tests for _files_for_type() S3 branch."""
+
+    def test_s3_branch_filters_by_convention1(self):
+        """Should match data_turbine_N.parquet convention from S3 listing."""
+        s3_files = [
+            "s3://bucket/kelmarsh/data_turbine_1.parquet",
+            "s3://bucket/kelmarsh/data_turbine_2.parquet",
+            "s3://bucket/kelmarsh/status_turbine_1.parquet",
+        ]
+        with patch("backend.services.query_service._list_farm_parquet_files",
+                   return_value=s3_files):
+            result = _files_for_type("s3://bucket/kelmarsh/", "data")
+        assert len(result) == 2
+        assert all("data_turbine" in f for f in result)
+
+    def test_s3_branch_filters_by_convention2(self):
+        """Should match T{NN}_{type}.parquet convention from S3 listing."""
+        s3_files = [
+            "s3://bucket/hot/T01_SCTurbine.parquet",
+            "s3://bucket/hot/T02_SCTurbine.parquet",
+            "s3://bucket/hot/T01_AlarmLog.parquet",
+        ]
+        with patch("backend.services.query_service._list_farm_parquet_files",
+                   return_value=s3_files):
+            result = _files_for_type("s3://bucket/hot/", "SCTurbine")
+        assert len(result) == 2
 
