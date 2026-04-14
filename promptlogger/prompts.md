@@ -305,3 +305,7 @@
 
 > ok so the main problem with docker is that parquet files on r2 storage are being downloaded and not accessed directly. fix that
 
+## Entry 76 - 2026-04-14
+
+> based on pdf instruction in polish language located C:\Users\adamc\PycharmProjects\windfarmdata\instructions\Uruchomienie i połączenie stacku LGTM z aplikacją FastAPI-2.pdf I want an lgtm stack to be included in the backend service. I also want the lgtm docker image to run
+
