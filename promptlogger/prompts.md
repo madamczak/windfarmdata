@@ -317,3 +317,7 @@
 
 > ok, now run tests, I want to see all the logs, traces and metrics in grafana
 
+## Entry 79 - 2026-04-14
+
+> windfarm stack is running - run the tests
+
