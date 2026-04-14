@@ -313,3 +313,7 @@
 
 > ok so opentelemetry was installed etc. check if everything works, and run it if possible. I've seen that lgtm stac was added to docker compose
 
+## Entry 78 - 2026-04-14
+
+> ok, now run tests, I want to see all the logs, traces and metrics in grafana
+
