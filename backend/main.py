@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 import uvicorn
 from backend.routers import wind_farms
-from backend.telemetry import REQUEST_TIME, metrics_response, setup_telemetry
+from backend.telemetry import REQUEST_TIME, metrics_response, setup_tracing, setup_loki_logging
 
 # ---------------------------------------------------------------------------
 # Logging configuration
@@ -57,8 +57,7 @@ CORS_ORIGINS = (
 async def lifespan(app: FastAPI):
     logger.info("Wind Farm Data API starting up — version %s", app.version)
     logger.debug("CORS origins: %s", CORS_ORIGINS)
-    # Wire up LGTM observability (tracing, Loki logging, Prometheus metrics)
-    setup_telemetry(app)
+    setup_loki_logging()
     yield
     logger.info("Wind Farm Data API shutting down.")
 
@@ -75,6 +74,13 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# ---------------------------------------------------------------------------
+# Phase 1: Tracing — must be called immediately after app creation,
+# before any middleware or routers are registered.
+# FastAPIInstrumentor wraps the ASGI app so every request gets a span.
+# ---------------------------------------------------------------------------
+setup_tracing(app)
 
 # ---------------------------------------------------------------------------
 # CORS — origins controlled by CORS_ORIGINS (see top of file)
