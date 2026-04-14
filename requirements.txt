@@ -10,6 +10,7 @@ pytest
 pytest-cov
 pytest-benchmark
 httpx
+requests
 flake8
 
 # LGTM observability stack
