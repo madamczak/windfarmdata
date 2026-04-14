@@ -29,6 +29,8 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
+    Counter,
+    Histogram,
     Summary,
     generate_latest,
 )
@@ -42,12 +44,88 @@ _DEFAULT_LOKI_ENDPOINT = "http://localhost:3100/loki/api/v1/push"
 SERVICE_NAME = "windfarm-api"
 
 # ---------------------------------------------------------------------------
-# Prometheus metric
+# Custom Prometheus metrics — windfarm API
 # ---------------------------------------------------------------------------
+
+# ── HTTP layer ──────────────────────────────────────────────────────────────
+
 REQUEST_TIME = Summary(
     "windfarm_request_processing_seconds",
     "Time spent processing a request, labelled by endpoint.",
     ["endpoint"],
+)
+
+REQUESTS_TOTAL = Counter(
+    "windfarm_requests_total",
+    "Total HTTP requests handled, by method, route and status code.",
+    ["method", "route", "status_code"],
+)
+
+REQUEST_DURATION = Histogram(
+    "windfarm_request_duration_seconds",
+    "HTTP request latency in seconds, by route.",
+    ["route"],
+    buckets=[0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0],
+)
+
+ERRORS_TOTAL = Counter(
+    "windfarm_errors_total",
+    "Total HTTP error responses (4xx/5xx), by route and status code.",
+    ["route", "status_code"],
+)
+
+# ── Data query layer ─────────────────────────────────────────────────────────
+
+DATA_QUERIES_TOTAL = Counter(
+    "windfarm_data_queries_total",
+    "Total day-data queries, labelled by farm and file_type.",
+    ["farm", "file_type"],
+)
+
+DATA_QUERY_DURATION = Histogram(
+    "windfarm_data_query_duration_seconds",
+    "Time to fetch parquet data for a single day, by farm and file_type.",
+    ["farm", "file_type"],
+    buckets=[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 40.0, 60.0, 120.0],
+)
+
+DATA_ROWS_RETURNED = Histogram(
+    "windfarm_data_rows_returned",
+    "Number of rows returned per day-data query, by farm.",
+    ["farm", "file_type"],
+    buckets=[0, 10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000],
+)
+
+DATE_RANGE_QUERIES_TOTAL = Counter(
+    "windfarm_date_range_queries_total",
+    "Total /time-ranges endpoint calls.",
+    [],
+)
+
+COLUMN_QUERIES_TOTAL = Counter(
+    "windfarm_column_queries_total",
+    "Total /columns endpoint calls.",
+    [],
+)
+
+# ── Data-quality / bad-request counters ─────────────────────────────────────
+
+EMPTY_RESULTS_TOTAL = Counter(
+    "windfarm_empty_results_total",
+    "Queries that returned zero rows, by farm and file_type.",
+    ["farm", "file_type"],
+)
+
+INVALID_DATE_REQUESTS_TOTAL = Counter(
+    "windfarm_invalid_date_requests_total",
+    "Requests with a date outside the farm's available range, by farm.",
+    ["farm"],
+)
+
+UNKNOWN_FARM_REQUESTS_TOTAL = Counter(
+    "windfarm_unknown_farm_requests_total",
+    "Requests for a farm name that does not exist.",
+    [],
 )
 
 # ---------------------------------------------------------------------------

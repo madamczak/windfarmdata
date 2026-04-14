@@ -19,7 +19,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 import uvicorn
 from backend.routers import wind_farms
-from backend.telemetry import REQUEST_TIME, metrics_response, setup_tracing, setup_loki_logging
+from backend.telemetry import (
+    REQUEST_TIME,
+    REQUESTS_TOTAL,
+    REQUEST_DURATION,
+    ERRORS_TOTAL,
+    metrics_response,
+    setup_tracing,
+    setup_loki_logging,
+)
 
 # ---------------------------------------------------------------------------
 # Logging configuration
@@ -98,16 +106,14 @@ app.add_middleware(
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next) -> Response:
-    """Log every incoming request and its response status + duration.
-
-    Also records the request processing time in the Prometheus REQUEST_TIME
-    summary, labelled by HTTP method + first path segment so the /metrics
-    endpoint stays separate from noisy per-turbine paths.
-    """
+    """Log every incoming request and record Prometheus metrics."""
     start = time.perf_counter()
-    # Build a stable tracking label (e.g. "GET /wind-farms")
+
+    # Stable route label — e.g. "GET /wind-farms"
     first_segment = request.url.path.split("/")[1] if request.url.path != "/" else ""
-    tracking_id = f"{request.method} /{first_segment}"
+    route_label = f"{request.method} /{first_segment}"
+    # Shorter label for high-cardinality histograms — just the path prefix
+    path_label = f"/{first_segment}"
 
     logger.info(
         "REQUEST  %s %s  client=%s  query=%s",
@@ -117,10 +123,26 @@ async def log_requests(request: Request, call_next) -> Response:
         str(request.query_params) or "(none)",
     )
 
-    with REQUEST_TIME.labels(endpoint=tracking_id).time():
+    with REQUEST_TIME.labels(endpoint=route_label).time():
         response: Response = await call_next(request)
 
-    elapsed_ms = (time.perf_counter() - start) * 1000
+    elapsed = time.perf_counter() - start
+    elapsed_ms = elapsed * 1000
+    status = str(response.status_code)
+
+    # ── Custom metrics ──────────────────────────────────────────────────
+    REQUESTS_TOTAL.labels(
+        method=request.method,
+        route=path_label,
+        status_code=status,
+    ).inc()
+
+    REQUEST_DURATION.labels(route=path_label).observe(elapsed)
+
+    if response.status_code >= 400:
+        ERRORS_TOTAL.labels(route=path_label, status_code=status).inc()
+    # ───────────────────────────────────────────────────────────────────
+
     logger.info(
         "RESPONSE %s %s  status=%d  duration=%.1f ms",
         request.method,

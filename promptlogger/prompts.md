@@ -337,3 +337,7 @@
 
 > Implement those metrics (windfarm_requests_total, windfarm_request_duration_seconds, windfarm_errors_total, windfarm_data_queries_total, windfarm_data_query_duration_seconds, windfarm_data_rows_returned, windfarm_date_range_queries_total, windfarm_column_queries_total, windfarm_empty_results_total, windfarm_invalid_date_requests_total, windfarm_unknown_farm_requests_total)
 
+## Entry 84 - 2026-04-14
+
+> ok, remove test_docker_integration, run all tests and check if coverage dropped, if dropped - add cases
+

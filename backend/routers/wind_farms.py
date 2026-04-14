@@ -5,6 +5,7 @@ Wind farms router — endpoints related to wind farm listing and metadata.
 import logging
 import os
 import re
+import time
 from datetime import date
 from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
@@ -25,6 +26,16 @@ from backend.services.query_service import (
     count_turbines_in_files,
     _list_farm_parquet_files,
     _is_s3_path,
+)
+from backend.telemetry import (
+    DATA_QUERIES_TOTAL,
+    DATA_QUERY_DURATION,
+    DATA_ROWS_RETURNED,
+    DATE_RANGE_QUERIES_TOTAL,
+    COLUMN_QUERIES_TOTAL,
+    EMPTY_RESULTS_TOTAL,
+    INVALID_DATE_REQUESTS_TOTAL,
+    UNKNOWN_FARM_REQUESTS_TOTAL,
 )
 
 logger = logging.getLogger("windfarm.routers.wind_farms")
@@ -129,6 +140,7 @@ def list_wind_farms() -> WindFarmsResponse:
 def get_wind_farm_time_ranges() -> WindFarmTimeRangesResponse:
     """Scan all parquet files per farm and return their earliest/latest timestamps."""
     logger.info("get_wind_farm_time_ranges: storage_backend='%s'", settings.storage_backend)
+    DATE_RANGE_QUERIES_TOTAL.inc()
 
     results = []
     for _, dir_name in WIND_FARM_MAP:
@@ -188,6 +200,7 @@ SCADA_FARMS = ["kelmarsh", "penmanshiel"]
 def get_wind_farm_columns() -> FarmColumnsResponse:
     """Read parquet schemas and return column names grouped by file type."""
     logger.info("get_wind_farm_columns: storage_backend='%s'", settings.storage_backend)
+    COLUMN_QUERIES_TOTAL.inc()
 
     farms = []
     for dir_name in SCADA_FARMS:
@@ -269,19 +282,19 @@ def get_day_data(
         columns if columns else "(all)",
     )
 
-
     # Validate farm name to prevent path traversal
     if farm not in VALID_FARMS:
         logger.warning(
             "get_day_data: rejected unknown farm='%s' (valid: %s)",
             farm, sorted(VALID_FARMS),
         )
+        UNKNOWN_FARM_REQUESTS_TOTAL.inc()
         raise HTTPException(
             status_code=404,
             detail=f"Farm '{farm}' not found. Valid farms: {sorted(VALID_FARMS)}",
         )
 
-    # Validate file_type before hitting the filesystem — must be a known type for this farm
+    # Validate file_type before hitting the filesystem
     valid_types = VALID_FILE_TYPES.get(farm, set())
     if file_type not in valid_types:
         logger.warning(
@@ -309,6 +322,10 @@ def get_day_data(
         farm_dir, file_type, query_date,
     )
 
+    # ── Count query and measure duration ───────────────────────────────
+    DATA_QUERIES_TOTAL.labels(farm=farm, file_type=file_type).inc()
+    t0 = time.perf_counter()
+
     try:
         col_names, rows = get_data_for_date(
             farm_dir=farm_dir,
@@ -321,11 +338,28 @@ def get_day_data(
             "get_day_data: bad request for farm='%s' file_type='%s' date=%s — %s",
             farm, file_type, query_date, exc,
         )
+        # Date not in available range counts as an invalid-date request
+        INVALID_DATE_REQUESTS_TOTAL.labels(farm=farm).inc()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        DATA_QUERY_DURATION.labels(farm=farm, file_type=file_type).observe(
+            time.perf_counter() - t0
+        )
+
+    # ── Record row-count and empty-result metrics ───────────────────────
+    row_count = len(rows)
+    DATA_ROWS_RETURNED.labels(farm=farm, file_type=file_type).observe(row_count)
+    if row_count == 0:
+        EMPTY_RESULTS_TOTAL.labels(farm=farm, file_type=file_type).inc()
+        logger.warning(
+            "get_day_data: farm='%s' file_type='%s' date=%s — query returned 0 rows",
+            farm, file_type, query_date,
+        )
+    # ───────────────────────────────────────────────────────────────────
 
     logger.info(
         "get_day_data: farm='%s' file_type='%s' date=%s — returned %d row(s) across %d column(s)",
-        farm, file_type, query_date, len(rows), len(col_names),
+        farm, file_type, query_date, row_count, len(col_names),
     )
 
     return DayDataResponse(
@@ -333,6 +367,6 @@ def get_day_data(
         file_type=file_type,
         date=query_date.isoformat(),
         columns=col_names,
-        row_count=len(rows),
+        row_count=row_count,
         rows=rows,
     )
