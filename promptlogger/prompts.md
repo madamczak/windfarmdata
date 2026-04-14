@@ -329,3 +329,7 @@
 
 > ok let's write a traffic script and run it
 
+## Entry 82 - 2026-04-14
+
+> ok, I can see windfarm-trace-test in traces - run traffic test again to verify if they work
+
