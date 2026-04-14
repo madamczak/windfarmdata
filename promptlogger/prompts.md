@@ -321,3 +321,7 @@
 
 > windfarm stack is running - run the tests
 
+## Entry 80 - 2026-04-14
+
+> ok, let's make it a little bit different than running existing tests - write some additional tests that would use dockerized endpoints instead of modifying existing ones and run them
+
