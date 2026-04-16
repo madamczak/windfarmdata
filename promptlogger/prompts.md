@@ -345,3 +345,6 @@
 
 > ok, end of work for today, commit everything and push to repo
 
+## Entry 86 - 2026-04-16
+
+> there is a failure on my github action: TestHelpers.test_basename_local_windows - _basename does not handle Windows backslash paths on Linux
