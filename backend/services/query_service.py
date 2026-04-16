@@ -156,7 +156,10 @@ def _basename(path: str) -> str:
     # posixpath / os.path.basename both handle the cases correctly together.
     if path.startswith("s3://"):
         return path.rstrip("/").split("/")[-1]
-    return os.path.basename(path)
+    # os.path.basename only splits on the OS-native separator.
+    # On Linux, Windows backslash paths are not split correctly, so we
+    # normalise by replacing backslashes with forward slashes first.
+    return os.path.basename(path.replace("\\", "/"))
 
 
 def get_time_range(farm_dir: str) -> tuple[object, object, str | None]:
