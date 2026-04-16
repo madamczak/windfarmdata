@@ -348,3 +348,8 @@
 ## Entry 86 - 2026-04-16
 
 > there is a failure on my github action: TestHelpers.test_basename_local_windows - _basename does not handle Windows backslash paths on Linux
+
+## Entry 87 - 2026-04-16
+
+> ok build frontend app and expose it from backend docker
+
