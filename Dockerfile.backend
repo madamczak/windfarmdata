@@ -1,15 +1,29 @@
 # =============================================================================
 # Dockerfile.backend — Wind Farm Data API (FastAPI + Uvicorn)
+#                      with built-in Vue 3 frontend (served as static files)
 #
 # Build:
 #   docker build -f Dockerfile.backend -t windfarmdata-backend .
 #
-# Run standalone (mount your local data/ directory):
-#   docker run -p 8000:8000 -v "$(pwd)/data:/app/data:ro" windfarmdata-backend
+# Run standalone:
+#   docker run -p 8000:8000 windfarmdata-backend
 # =============================================================================
 
 # --------------------------------------------------------------------------
-# Stage 1 — dependency install (cached separately from source code)
+# Stage 1 — build the Vue 3 frontend
+# --------------------------------------------------------------------------
+FROM node:20-alpine AS frontend-build
+
+WORKDIR /app
+
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci
+
+COPY frontend/ .
+RUN npm run build
+
+# --------------------------------------------------------------------------
+# Stage 2 — Python dependency install (cached separately from source code)
 # --------------------------------------------------------------------------
 FROM python:3.12-slim AS deps
 
@@ -27,7 +41,7 @@ RUN pip install --no-cache-dir --upgrade pip \
  && pip install --no-cache-dir -r requirements.txt
 
 # --------------------------------------------------------------------------
-# Stage 2 — runtime image
+# Stage 3 — runtime image
 # --------------------------------------------------------------------------
 FROM python:3.12-slim AS runtime
 
@@ -39,6 +53,9 @@ COPY --from=deps /usr/local/bin /usr/local/bin
 
 # Copy application source (data/ is excluded via .dockerignore)
 COPY backend/ ./backend/
+
+# Copy the compiled Vue frontend into a static/ directory served by FastAPI
+COPY --from=frontend-build /app/dist /app/static
 
 # Create the data directory placeholder for local mode
 RUN mkdir -p /app/data
@@ -66,4 +83,3 @@ CMD ["uvicorn", "backend.main:app", \
      "--port", "8000", \
      "--workers", "1", \
      "--log-level", "info"]
-

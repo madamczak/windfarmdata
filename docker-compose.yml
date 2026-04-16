@@ -1,14 +1,12 @@
 # =============================================================================
-# docker-compose.yml — Wind Farm Data (backend + frontend + LGTM observability)
+# docker-compose.yml — Wind Farm Data (backend + LGTM observability)
+#
+# The Vue 3 frontend is built into the backend image and served directly
+# by FastAPI on port 8000 (mapped to host port 80 for convenience).
 #
 # Usage:
-#   # Start everything (mounts local data/ as read-only into backend)
 #   docker compose up --build
-#
-#   # Rebuild only the backend after a code change
 #   docker compose up --build backend
-#
-#   # Stop and remove containers (data volume is preserved)
 #   docker compose down
 #
 # LGTM stack (Loki + Grafana + Tempo + Mimir) is provided by grafana/otel-lgtm.
@@ -37,7 +35,7 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Backend — FastAPI served by Uvicorn
+  # Backend — FastAPI (Uvicorn) + Vue 3 frontend served as static files
   # ---------------------------------------------------------------------------
   backend:
     build:
@@ -57,9 +55,8 @@ services:
     environment:
       # Always use R2 as the storage backend in Docker (parquet files in R2)
       STORAGE_BACKEND: "r2"
-      # Allow requests from the Nginx frontend container.
-      # In production replace with your real frontend domain.
-      CORS_ORIGINS: "http://localhost,http://localhost:80"
+      # Frontend is served from the same origin — no cross-origin requests
+      CORS_ORIGINS: ""
       # Pass R2 credentials through from the host shell environment.
       # In PowerShell set them with:
       #   $env:R2_ACCESS_KEY_ID      = "your-key"
@@ -76,8 +73,8 @@ services:
       - lgtm
 
     ports:
-      # Expose directly for development; in production only Nginx needs access
-      - "8000:8000"
+      - "80:8000"    # App (frontend + API) accessible on http://localhost
+      - "8000:8000"  # Also accessible directly on port 8000
 
     restart: unless-stopped
 
@@ -89,31 +86,5 @@ services:
       retries: 3
       start_period: 15s
 
-  # ---------------------------------------------------------------------------
-  # Frontend — Vite build served by Nginx
-  # ---------------------------------------------------------------------------
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    container_name: windfarmdata-frontend
-
-    ports:
-      - "80:80"
-
-    depends_on:
-      backend:
-        condition: service_healthy
-
-    restart: unless-stopped
-
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
 # (no named volumes required — R2 data is accessed directly over S3)
-
 

@@ -16,7 +16,8 @@ import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 from backend.routers import wind_farms
 from backend.telemetry import (
@@ -170,6 +171,34 @@ app.include_router(wind_farms.router)
 logger.debug("Router registered: %s", wind_farms.router.prefix)
 
 
+# ---------------------------------------------------------------------------
+# Static files — Vue 3 frontend built into /app/static by the Docker image.
+# Only mounted when the directory exists so local dev (uvicorn --reload) still
+# works without the frontend being built.
+# ---------------------------------------------------------------------------
+_STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
+
+if os.path.isdir(_STATIC_DIR):
+    # Serve Vue assets (JS / CSS / images) under /assets
+    _assets_dir = os.path.join(_STATIC_DIR, "assets")
+    if os.path.isdir(_assets_dir):
+        app.mount("/assets", StaticFiles(directory=_assets_dir), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_catch_all(full_path: str) -> HTMLResponse:
+        """Return index.html for every unknown path so Vue Router works."""
+        index_file = os.path.join(_STATIC_DIR, "index.html")
+        with open(index_file, "r", encoding="utf-8") as fh:
+            content = fh.read()
+        return HTMLResponse(content=content)
+
+    logger.info("Serving Vue frontend from %s", os.path.abspath(_STATIC_DIR))
+else:
+    logger.info("No static/ directory found — frontend not served (dev mode)")
+
+
 if __name__ == "__main__":
     uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=True)
+
+
 

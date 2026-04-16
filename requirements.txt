@@ -3,6 +3,7 @@ pyarrow
 matplotlib
 fastapi
 uvicorn[standard]
+aiofiles
 pydantic-settings
 duckdb
 boto3
